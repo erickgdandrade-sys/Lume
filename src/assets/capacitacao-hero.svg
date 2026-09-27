@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EAF5FB"/>
+      <stop offset="0.55" stop-color="#F4F7FD"/>
+      <stop offset="1" stop-color="#FDF5DF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <circle cx="1060" cy="40" r="170" fill="#F8E7B0" opacity="0.55"/>
+  <circle cx="120" cy="420" r="200" fill="#CFEAF5" opacity="0.6"/>
+
+  <rect x="150" y="70" width="380" height="230" rx="22" fill="#2F4A66"/>
+  <rect x="172" y="92" width="336" height="186" rx="12" fill="#3B5C7C"/>
+  <rect x="200" y="120" width="120" height="14" rx="7" fill="#F8E7B0"/>
+  <rect x="200" y="150" width="200" height="10" rx="5" fill="#9FC6DE"/>
+  <rect x="200" y="172" width="170" height="10" rx="5" fill="#9FC6DE"/>
+  <circle cx="440" cy="200" r="34" fill="none" stroke="#9FDBA8" stroke-width="8"/>
+  <path d="M424 200 l12 12 l22 -24" fill="none" stroke="#9FDBA8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="200" y="226" width="90" height="26" rx="13" fill="#E99A4E"/>
+
+  <circle cx="640" cy="150" r="36" fill="#8A5A44"/>
+  <path d="M604 150 a36 36 0 0 1 72 0 q-8 -30 -36 -30 q-28 0 -36 30z" fill="#3A2A22"/>
+  <path d="M586 330 q0 -120 54 -120 q54 0 54 120z" fill="#4F7FD8"/>
+  <path d="M600 245 q-40 -10 -70 -60" fill="none" stroke="#4F7FD8" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="528" cy="182" r="11" fill="#8A5A44"/>
+
+  <g>
+    <circle cx="820" cy="250" r="26" fill="#C98E6B"/>
+    <path d="M784 350 q0 -76 36 -76 q36 0 36 76z" fill="#E3685F"/>
+  </g>
+  <g>
+    <circle cx="920" cy="236" r="26" fill="#F0C7A4"/>
+    <path d="M884 350 q0 -86 36 -86 q36 0 36 86z" fill="#6DBE78"/>
+  </g>
+  <g>
+    <circle cx="1020" cy="250" r="26" fill="#6E4A3A"/>
+    <path d="M984 350 q0 -76 36 -76 q36 0 36 76z" fill="#4FB3D9"/>
+  </g>
+  <rect x="740" y="340" width="360" height="22" rx="11" fill="#E6D3B8"/>
+
+  <circle cx="780" cy="120" r="10" fill="#E6BE3C"/>
+  <circle cx="1090" cy="170" r="8" fill="#A77FD6"/>
+  <circle cx="880" cy="90" r="6" fill="#E3685F"/>
+</svg>
