@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, GraduationCap, Sparkles, Users, BookOpen, BarChart3, Flame } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import logo from "@/assets/lume-logo.png";
 import { MenuPerfil } from "@/components/MenuPerfil";
 import { Notificacoes } from "@/components/Notificacoes";
@@ -15,6 +15,8 @@ const nav = [
   { to: "/relatorios", label: "Relatórios", icon: BarChart3 },
 ] as const;
 
+const paginaEstatica = import.meta.env["VITE_SEM_SERVIDOR"] === "true";
+
 function isActive(pathname: string, to: string) {
   return to === "/" ? pathname === "/" : pathname.startsWith(to);
 }
@@ -25,6 +27,8 @@ export function LumeLogo({ className }: { className?: string }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [montado, setMontado] = useState(!paginaEstatica);
+  useEffect(() => setMontado(true), []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav className="flex flex-1 flex-col gap-1" aria-label="Principal">
           {nav.map((item) => {
-            const active = isActive(pathname, item.to);
+            const active = montado && isActive(pathname, item.to);
             return (
               <Link
                 key={item.to}
@@ -86,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-border bg-card/95 px-1 py-2 backdrop-blur lg:hidden"
       >
         {nav.map((item) => {
-          const active = isActive(pathname, item.to);
+          const active = montado && isActive(pathname, item.to);
           return (
             <Link
               key={item.to}

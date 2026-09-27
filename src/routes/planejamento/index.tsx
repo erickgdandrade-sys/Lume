@@ -36,6 +36,8 @@ export const Route = createFileRoute("/planejamento/")({
   component: Planejamento,
 });
 
+const semServidor = import.meta.env["VITE_SEM_SERVIDOR"] === "true";
+
 const exemplos = [
   "Aula de matemática (4º ano, 50 min) sobre adição e subtração com situações do cotidiano. Explicação no quadro, lista de 10 exercícios individuais e correção no quadro.",
   "Roda de leitura em grupo (3º ano) com o livro 'Menina bonita do laço de fita', seguida de discussão oral e produção de um desenho.",
@@ -61,6 +63,10 @@ function Planejamento() {
   }
 
   async function enviar() {
+    if (semServidor) {
+      navigate({ to: "/planejamento/resultado" });
+      return;
+    }
     if (curto || carregando) return;
     setCarregando(true);
     setErro("");
@@ -172,15 +178,29 @@ function Planejamento() {
           </div>
         ) : null}
 
+        {semServidor ? (
+          <div className="mt-4 flex items-start gap-2 rounded-2xl bg-sun-soft px-4 py-3 text-sm">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Esta é a versão de demonstração online: a adaptação com IA funciona só na versão
+              instalada. Clique abaixo para ver um exemplo de plano adaptado.
+            </span>
+          </div>
+        ) : null}
+
         <button
           type="submit"
-          disabled={curto || carregando}
+          disabled={semServidor ? false : curto || carregando}
           className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-soft transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {carregando ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" /> Adaptando sua aula… pode levar até 1
               minuto
+            </>
+          ) : semServidor ? (
+            <>
+              <Sparkles className="h-4 w-4" /> Ver exemplo de plano adaptado
             </>
           ) : (
             <>
