@@ -1,4 +1,4 @@
-# Lume — Mais inclusão, menos barreiras
+# Projeto Lume — Mais inclusão, menos barreiras
 
 Plataforma de educação inclusiva para professores: capacitação prática, planejamento de aula
 com IA, perfis dos alunos, biblioteca de estratégias e relatórios.
