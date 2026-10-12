@@ -25,6 +25,7 @@ npm run dev  # ou: bun dev
 | `/alunos/$id` | Perfil detalhado do aluno |
 | `/biblioteca` | Biblioteca de estratégias |
 | `/relatorios` | Relatórios da turma |
+| `/lumis-run/` | Jogo Lumis Run 3D do stand (código em `jogos/lumis-run/`) |
 
 ## Tecnologias
 
