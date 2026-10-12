@@ -227,10 +227,43 @@ await phone.goto(url + '#arte=' + code)
 await phone.waitForSelector('.lr-share-art img', { timeout: 15000 }).catch(() => {})
 await wait(500)
 const pg = await phone.evaluate(() => document.body.innerText)
-check('página do QR mostra a arte e o botão de salvar', /Sua arte do Lumis Run/.test(pg) && /Salvar imagem/.test(pg) && (await phone.locator('.lr-share-art img').count()) === 1)
+check('página do QR mostra a arte e o botão de salvar', /Sua arte está pronta/.test(pg) && /Salvar imagem/i.test(pg) && (await phone.locator('.lr-share-art img').count()) === 1)
 check('página do QR não carrega o jogo 3D', (await phone.locator('canvas:not([hidden])').count()) === 0 && !/JOGAR/.test(pg))
 await phone.screenshot({ path: `${out}/13-celular-arte.png`, fullPage: true })
 await phone.close()
+// celular Android com menu de compartilhar: um toque entrega a arte pronta ao Instagram
+const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36'
+const mockShare = () => {
+  window.__shared = null
+  navigator.canShare = (d) => !!d && Array.isArray(d.files) && d.files.length > 0
+  navigator.share = async (d) => {
+    const f = d.files[0]
+    const bmp = await createImageBitmap(f)
+    window.__shared = { n: d.files.length, type: f.type, name: f.name, w: bmp.width, h: bmp.height, text: d.text ?? null }
+  }
+}
+const phone3 = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: ANDROID_UA })
+phone3.on('pageerror', (e) => errors.push(e.message))
+await phone3.addInitScript(mockShare)
+await phone3.goto(url + '#arte=' + code)
+await phone3.waitForSelector('.lr-insta', { timeout: 15000 }).catch(() => {})
+const pg3 = await phone3.evaluate(() => document.body.innerText)
+check('celular: botão "Postar no Instagram" aparece no topo', (await phone3.locator('.lr-insta').count()) === 1 && /Stories/.test(pg3))
+await phone3.locator('.lr-insta').click()
+await phone3.waitForFunction(() => window.__shared, null, { timeout: 5000 }).catch(() => {})
+const shared = await phone3.evaluate(() => window.__shared)
+check('um toque envia a arte PNG 1080x1920 ao menu de compartilhar', !!shared && shared.n === 1 && shared.type === 'image/png' && shared.w === 1080 && shared.h === 1920 && shared.text === null)
+check('depois de compartilhar mostra "Agora é só postar"', /Agora é só postar/.test(await phone3.evaluate(() => document.body.innerText)))
+await phone3.screenshot({ path: `${out}/13b-celular-instagram.png`, fullPage: true })
+await phone3.close()
+// aberto dentro do app do Instagram: avisa para abrir no navegador
+const phone4 = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: ANDROID_UA + ' Instagram 300.0.0.0' })
+await phone4.addInitScript(mockShare)
+await phone4.goto(url + '#arte=' + code)
+await phone4.waitForSelector('.lr-share-art img', { timeout: 15000 }).catch(() => {})
+const pg4 = await phone4.evaluate(() => document.body.innerText)
+check('navegador do Instagram: pede para abrir no navegador e oferece salvar + abrir stories', /Abrir no navegador/.test(pg4) && /Salvar imagem/i.test(pg4) && (await phone4.locator('a[href="instagram://story-camera"]').count()) === 1)
+await phone4.close()
 const phone2 = await browser.newPage({ viewport: { width: 390, height: 844 } })
 await phone2.goto(url + '#arte=lixo')
 await phone2.waitForSelector('h1', { timeout: 10000 }).catch(() => {})
