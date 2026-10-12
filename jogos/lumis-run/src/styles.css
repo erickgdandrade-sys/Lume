@@ -302,3 +302,9 @@ html.lr-page body { user-select: auto; -webkit-user-select: auto; }
 @keyframes lr-flash { from { opacity: 1; } to { opacity: 0; } }
 .lr-photo-card .lr-actions { justify-content: center; }
 @media (max-height: 760px) { .lr-camera { width: min(100%, 300px); } }
+
+/* Página do QR: botão principal do Instagram */
+.lr-insta { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 56px; font-size: 19px; background: linear-gradient(45deg, #f9ce34, #ee2a7b 45%, #6228d7); box-shadow: 0 14px 30px -14px rgba(238,42,123,0.8); }
+.lr-insta-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #c1357a; }
+.lr-share-warn { width: min(100%, 340px); margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; background: #fff7d6; color: #6b4e00; font-size: 14px; line-height: 1.5; }
+.lr-share-page .lr-link { margin-top: 2px; font-size: 14px; color: var(--ink-2); }
