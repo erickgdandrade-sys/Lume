@@ -1,8 +1,8 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { FOG } from '../config/gameConfig'
-import { SCENE_COLORS } from '../config/palette'
+import { CORRIDOR } from '../config/gameConfig'
+import { scenarioOfLevel, visualLevelAt, visualStart } from '../core/levels'
 import type { SimState } from '../core/sim'
 import { MOVE } from '../core/sim'
 import { session } from '../session'
@@ -10,9 +10,11 @@ import { useUi } from '../ui/uiStore'
 import { AdaptiveQuality, QUALITY_LEVELS } from './AdaptiveQuality'
 import { CameraRig } from './CameraRig'
 import { Corridor } from './Corridor'
-import { Lights } from './Lights'
+import { Atmosphere } from './Atmosphere'
+import { Portal } from './Portal'
+import { prewarmScenarios } from './scenery'
 import { Lumis, type LumisDriver } from './Lumis'
-import { computePose, overlayTwirl, overlayWave, TWIRL_TIME, WAVE_TIME, type LumisMode } from './lumisPose'
+import { computePose, LEAP, overlayTwirl, overlayWindow, TWIRL_TIME, type LumisMode } from './lumisPose'
 import { Books } from './Books'
 import { ContactShadows } from './ContactShadows'
 import { Obstacles } from './Obstacles'
@@ -27,6 +29,25 @@ function SimDriver() {
 
 const getSim = () => session.sim
 const getX = () => session.sim?.x ?? 0
+const running = () => !!session.sim && session.phase !== 'idle'
+
+/** cenário (0..9) do trecho que começa na distância da vista; o menu é sempre o corredor */
+function sceneAt(viewD: number) {
+  return running() ? scenarioOfLevel(visualLevelAt(viewD, session.viewOffset)) : 0
+}
+
+/** fachada da janela mais próxima: a próxima à frente ou a que acabou de passar */
+function portalAt() {
+  if (!running()) return null
+  const view = session.viewDistance
+  const lv = session.levelNow()
+  for (const n of [lv + 1, lv]) {
+    if (n < 2) continue
+    const z = view - visualStart(n, session.viewOffset)
+    if (z > -CORRIDOR.segmentLength * (CORRIDOR.segmentsAhead - 0.2) && z < 24) return { z, scene: scenarioOfLevel(n) }
+  }
+  return null
+}
 
 /** traduz o estado da simulação para a animação da Lumis */
 function lumisDriver(): LumisDriver {
@@ -79,16 +100,15 @@ function lumisDriver(): LumisDriver {
       const pose = computePose(mode, t, clock, lateral)
       // altura exata da simulação durante o salto (inclui a descida rápida)
       if (s.action === 'jump' || s.action === 'dive') pose.y = LUMIS.hoverHeight + s.air
-      // animações por cima da corrida: tchau ao passar de nível, giro ao bater o recorde
+      // animações por cima da corrida: pulo pela janela ao passar de nível, giro ao bater o recorde
       debug.overlay = ''
-      if (mode === 'run' && phase === 'running') {
-        if (session.levelUpClock < WAVE_TIME) {
-          overlayWave(pose, session.levelUpClock)
-          debug.overlay = 'tchau'
-        } else if (session.recordClock < TWIRL_TIME) {
-          overlayTwirl(pose, session.recordClock)
-          debug.overlay = 'giro'
-        }
+      const tr = phase === 'running' || phase === 'crashed' ? session.transition() : null
+      if (tr && (mode === 'run' || mode === 'land') && !s.crashed) {
+        overlayWindow(pose, tr.t)
+        debug.overlay = tr.t < LEAP.end ? 'janela' : 'espanto'
+      } else if (mode === 'run' && phase === 'running' && session.recordClock < TWIRL_TIME) {
+        overlayTwirl(pose, session.recordClock)
+        debug.overlay = 'giro'
       }
       // "pulinho" ao pegar um livro
       if (session.effect.seq !== bookSeq) {
@@ -128,21 +148,28 @@ function RenderStats() {
   return null
 }
 
+/** câmera perto da Lumis enquanto ela se espanta e acena depois da janela */
+function closeUp() {
+  if (session.phase !== 'running') return false
+  const tr = session.transition()
+  return !!tr && tr.t > LEAP.end - 0.05 && tr.t < LEAP.waveEnd - 0.1
+}
+
 function Scene() {
   const quality = useUi((s) => s.quality)
   const set = useUi((s) => s.set)
   const shadows = QUALITY_LEVELS[quality].shadows
 
   const driver = useMemo(lumisDriver, [])
+  useEffect(() => prewarmScenarios(), [])
 
   return (
     <>
-      <color attach="background" args={[SCENE_COLORS.sky]} />
-      <fog attach="fog" args={[SCENE_COLORS.sky, FOG.near, FOG.far]} />
       <SimDriver />
       <RenderStats />
-      <Lights getX={getX} shadows={shadows} hiRes={quality >= 3} />
-      <Corridor getDistance={() => session.viewDistance} />
+      <Atmosphere getX={getX} getScene={() => sceneAt(session.viewDistance)} shadows={shadows} hiRes={quality >= 3} />
+      <Corridor getDistance={() => session.viewDistance} sceneAt={sceneAt} />
+      <Portal get={portalAt} />
       <Obstacles getSim={getSim} />
       <ContactShadows getSim={getSim} />
       <Books getSim={getSim} />
@@ -150,7 +177,7 @@ function Scene() {
       <Sparkles watch={() => ({ seq: session.effect.seq, x: session.effect.x, y: session.effect.y, crash: session.effect.type === 'crash' })} />
       <CameraRig
         read={() => ({
-          mode: session.phase === 'idle' ? 'menu' : session.phase === 'countdown' && session.sim?.tick === 0 && session.phaseClock < 2.3 ? 'greet' : 'run',
+          mode: session.phase === 'idle' ? 'menu' : (session.phase === 'countdown' && session.sim?.tick === 0 && session.phaseClock < 2.3) || closeUp() ? 'greet' : 'run',
           x: getX(),
           shake: session.phase === 'crashed' ? Math.max(0, 1 - session.phaseClock / 0.4) : 0,
         })}
@@ -166,7 +193,7 @@ export function GameCanvas() {
       shadows={{ type: THREE.PCFSoftShadowMap }}
       dpr={1}
       gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.NeutralToneMapping }}
-      camera={{ fov: 58, near: 0.1, far: FOG.far + 10, position: [-1.2, 1.35, 3.6] }}
+      camera={{ fov: 58, near: 0.1, far: 170, position: [-1.2, 1.35, 3.6] }}
       onCreated={({ gl }) => {
         gl.toneMappingExposure = 1.08
         const canvas = gl.domElement

@@ -22,33 +22,3 @@ export const LUMIS_COLORS = {
   tongue: '#F06A7A',
   cheek: '#FF9E8A',
 } as const
-
-// Versões pastel das cores da marca, usadas em armários, portas e murais
-// para o cenário não competir com a Lumis e os obstáculos.
-export const PASTEL = {
-  azul: '#9CC3FA',
-  rosa: '#F9B9D9',
-  amarelo: '#FCDD8A',
-  verde: '#9BE8CB',
-  roxo: '#C4B1F9',
-  laranja: '#FDC59A',
-} as const
-
-export const SCENE_COLORS = {
-  sky: '#EAF0F8',
-  wall: '#F6F1E9',
-  wallTrim: '#DDE5EF',
-  baseboard: '#94A3B8',
-  floorA: '#F3EEE6',
-  floorB: '#E9E2D6',
-  ceiling: '#FFFFFF',
-  lightPanel: '#FFFBEB',
-  doorWood: '#D9A86C',
-  board: '#2F5D50',
-  cork: '#D6A66A',
-  glass: '#CFE6FF',
-  classroomFloor: '#E7D8C3',
-  classroomWall: '#FDF6E8',
-  desk: '#E8C38F',
-  deskLeg: '#64748B',
-} as const

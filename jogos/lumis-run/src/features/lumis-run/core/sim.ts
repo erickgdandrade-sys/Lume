@@ -66,16 +66,26 @@ export interface SimState {
   events: SimEvent[]
 }
 
-export function createSim(seed: number): SimState {
+/**
+ * @param startDistance só para treino e testes (?nivel=N): começa a corrida
+ * mais adiante na pista, com o relógio e a velocidade de quem chegou ali.
+ */
+export function createSim(seed: number, startDistance = 0): SimState {
   const gen = createGen(mulberry32(seed))
-  warmupBooks(gen)
-  fillUntil(gen, AHEAD, 0)
+  let tick = 0
+  let distance = 0
+  while (distance < startDistance) distance += speedAt(++tick * STEP) * STEP
+  if (startDistance > 0) {
+    gen.prevD = distance
+    gen.nextD = distance + 30
+  } else warmupBooks(gen)
+  fillUntil(gen, distance + AHEAD, tick * STEP)
   return {
     seed,
-    tick: 0,
-    time: 0,
-    distance: 0,
-    speed: speedAt(0),
+    tick,
+    time: tick * STEP,
+    distance,
+    speed: speedAt(tick * STEP),
     lane: 1,
     x: 0,
     xFrom: 0,

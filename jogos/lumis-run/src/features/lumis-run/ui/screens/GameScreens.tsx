@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { session } from '../../session'
+import { scenarioName } from '../../core/levels'
 import { BookIcon, ConnStatus, ControlsHint, GamepadIcon, Hint } from '../bits'
 import { sound } from '../../audio/sound'
 import { QrCode } from '../../share/qr'
@@ -29,7 +30,7 @@ export function Hud() {
     <>
       {banner && (
         <div className="lr-level-banner" key={banner} role="status">
-          Nível {banner}!<span>mais rápido</span>
+          Nível {banner}!<span>{scenarioName(banner)}</span>
         </div>
       )}
       <div className="lr-hud" aria-live="off">

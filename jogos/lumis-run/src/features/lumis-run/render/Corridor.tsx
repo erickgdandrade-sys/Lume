@@ -2,49 +2,59 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { CORRIDOR } from '../config/gameConfig'
-import { SCENE_COLORS } from '../config/palette'
-import { variantFor, visibleSegments } from '../core/segments'
+import { hashInt } from '../core/rng'
+import { visibleSegments } from '../core/segments'
 import { edgeShadeTexture } from './ContactShadows'
-import { buildCommon, buildSide, floorTexture, SIDE_VARIANTS, type SidePiece } from './corridorBuilder'
+import { scenarioAssets } from './scenery'
 
 const L = CORRIDOR.segmentLength
 const SLOTS = CORRIDOR.segmentsAhead + CORRIDOR.segmentsBehind + 1
 
+type Slot = {
+  group: THREE.Group
+  floor: THREE.Mesh
+  ao: THREE.Mesh
+  parts: THREE.Mesh[] // comum (opaco, emissivo, vidro), esquerda (3), direita (3)
+}
+
+/** variação de cada lado do segmento k, estável para o mesmo k */
+function variantFor(k: number, side: -1 | 1, count: number) {
+  // o primeiro segmento é sempre o primeiro tipo, para o menu ter um fundo previsível
+  if (k <= 0) return 0
+  return hashInt(k, side === -1 ? 7 : 13) % count
+}
+
 /**
- * Corredor infinito: um número fixo de "vagas" de segmento que são
- * reposicionadas conforme a distância avança (object pooling). Nada é criado
- * ou destruído durante a corrida.
+ * Cenário infinito: um número fixo de "vagas" de segmento que são
+ * reposicionadas conforme a distância avança (object pooling). Cada vaga
+ * troca de geometria quando o segmento muda de cenário ou de variação;
+ * nada é criado ou destruído durante a corrida.
+ *
+ * @param sceneAt cenário (0..9) do segmento que começa na distância da vista dada
  */
-export function Corridor({ getDistance }: { getDistance: () => number }) {
-  const slots = useRef<THREE.Group[]>([])
+export function Corridor({ getDistance, sceneAt }: { getDistance: () => number; sceneAt: (viewD: number) => number }) {
+  const slots = useRef<Slot[]>([])
 
   const res = useMemo(() => {
-    const opaque = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 })
-    const emissive = new THREE.MeshBasicMaterial({ vertexColors: true })
-    const glass = new THREE.MeshStandardMaterial({ color: SCENE_COLORS.glass, transparent: true, opacity: 0.18, roughness: 0.05, depthWrite: false })
-    const tex = floorTexture()
-    tex.repeat.set(CORRIDOR.width / 4, L / 4)
-    const floorMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 })
+    const opaque = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 })
+    const emissive = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })
+    const glass = new THREE.MeshStandardMaterial({ color: '#BFD8EE', transparent: true, opacity: 0.2, roughness: 0.05, depthWrite: false })
     const floorGeo = new THREE.PlaneGeometry(CORRIDOR.width, L)
     floorGeo.rotateX(-Math.PI / 2)
     floorGeo.translate(0, 0, -L / 2)
-    // oclusão de ambiente falsa: o chão escurece junto às paredes
+    // oclusão de ambiente falsa: o chão escurece junto às laterais
     const aoTex = edgeShadeTexture()
     const aoMat = new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 })
     const aoGeo = new THREE.BufferGeometry()
     {
       const W = 1.1
-      const parts: THREE.BufferGeometry[] = []
+      const pos: number[] = []
+      const uv: number[] = []
       for (const side of [-1, 1]) {
         const g = new THREE.PlaneGeometry(W, L)
         g.rotateX(-Math.PI / 2)
         if (side === 1) g.rotateY(Math.PI)
         g.translate(side * (CORRIDOR.width / 2 - W / 2), 0.008, -L / 2)
-        parts.push(g)
-      }
-      const pos: number[] = []
-      const uv: number[] = []
-      for (const g of parts) {
         const ng = g.toNonIndexed()
         pos.push(...(ng.attributes.position.array as Float32Array))
         uv.push(...(ng.attributes.uv.array as Float32Array))
@@ -52,28 +62,12 @@ export function Corridor({ getDistance }: { getDistance: () => number }) {
       aoGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
       aoGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
     }
-    const common = buildCommon()
-    const sides: Record<'-1' | '1', SidePiece[]> = {
-      '-1': SIDE_VARIANTS.map((v) => buildSide(v, -1)),
-      '1': SIDE_VARIANTS.map((v) => buildSide(v, 1)),
-    }
-    return { opaque, emissive, glass, tex, floorMat, floorGeo, common, sides, aoTex, aoMat, aoGeo }
+    return { opaque, emissive, glass, floorGeo, aoTex, aoMat, aoGeo }
   }, [])
 
   useEffect(
     () => () => {
-      const all = [res.common, ...res.sides['-1'], ...res.sides['1']]
-      for (const p of all) {
-        p.opaque.dispose()
-        p.emissive.dispose()
-        p.glass.dispose()
-      }
-      res.floorGeo.dispose()
-      res.tex.dispose()
-      res.aoGeo.dispose()
-      res.aoTex.dispose()
-      res.aoMat.dispose()
-      for (const m of [res.opaque, res.emissive, res.glass, res.floorMat]) m.dispose()
+      for (const d of [res.opaque, res.emissive, res.glass, res.floorGeo, res.aoTex, res.aoMat, res.aoGeo]) d.dispose()
     },
     [res],
   )
@@ -81,40 +75,43 @@ export function Corridor({ getDistance }: { getDistance: () => number }) {
   useFrame(() => {
     const segs = visibleSegments(getDistance())
     for (let i = 0; i < SLOTS; i++) {
-      const g = slots.current[i]
-      if (!g) continue
+      const s = slots.current[i]
+      if (!s) continue
       const { k, z } = segs[i]
-      g.position.z = z
-      const vl = variantFor(k, -1)
-      const vr = variantFor(k, 1)
-      // filhos: [0] comum, [1..4] lado esquerdo, [5..8] lado direito
-      for (let v = 0; v < SIDE_VARIANTS.length; v++) {
-        g.children[1 + v].visible = v === vl
-        g.children[1 + SIDE_VARIANTS.length + v].visible = v === vr
+      s.group.position.z = z
+      const a = scenarioAssets(sceneAt(k * L + 0.01))
+      s.floor.material = a.floorMat
+      const count = a.sides['-1'].length
+      const pieces = [a.common, a.sides['-1'][variantFor(k, -1, count)], a.sides['1'][variantFor(k, 1, count)]]
+      for (let p = 0; p < 3; p++) {
+        const piece = pieces[p]
+        const geos = [piece.opaque, piece.emissive, piece.glass]
+        for (let j = 0; j < 3; j++) {
+          const mesh = s.parts[p * 3 + j]
+          if (mesh.geometry !== geos[j]) mesh.geometry = geos[j]
+          mesh.visible = !!geos[j].attributes.position
+        }
       }
     }
   })
 
-  const piece = (p: SidePiece, key: string) => (
-    <group key={key}>
-      <mesh geometry={p.opaque} material={res.opaque} receiveShadow />
-      {p.emissive.attributes.position && <mesh geometry={p.emissive} material={res.emissive} />}
-      {p.glass.attributes.position && <mesh geometry={p.glass} material={res.glass} renderOrder={3} />}
-    </group>
-  )
-
+  const mats = [res.opaque, res.emissive, res.glass]
   return (
     <group>
       {Array.from({ length: SLOTS }, (_, i) => (
-        <group key={i} ref={(g) => { if (g) slots.current[i] = g }}>
-          <group>
-            <mesh geometry={res.floorGeo} material={res.floorMat} receiveShadow />
-            <mesh geometry={res.common.opaque} material={res.opaque} receiveShadow />
-            <mesh geometry={res.common.emissive} material={res.emissive} />
-            <mesh geometry={res.aoGeo} material={res.aoMat} renderOrder={1} />
-          </group>
-          {res.sides['-1'].map((p, v) => piece(p, 'l' + v))}
-          {res.sides['1'].map((p, v) => piece(p, 'r' + v))}
+        <group
+          key={i}
+          ref={(g) => {
+            if (!g) return
+            const meshes = g.children as THREE.Mesh[]
+            slots.current[i] = { group: g, floor: meshes[0], ao: meshes[1], parts: meshes.slice(2) }
+          }}
+        >
+          <mesh geometry={res.floorGeo} receiveShadow />
+          <mesh geometry={res.aoGeo} material={res.aoMat} renderOrder={1} />
+          {Array.from({ length: 9 }, (_, j) => (
+            <mesh key={j} material={mats[j % 3]} receiveShadow={j % 3 === 0} renderOrder={j % 3 === 2 ? 3 : 0} />
+          ))}
         </group>
       ))}
     </group>
