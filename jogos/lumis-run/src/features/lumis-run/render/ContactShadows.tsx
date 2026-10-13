@@ -17,6 +17,7 @@ const FOOT: Record<ObstacleKind, [number, number]> = {
   carrinho: [2.1, 1.9],
   barreira: [7.6, 0.9],
   faixa: [0, 0], // pendurada: sem sombra no chão
+  placa: [1.9, 0.7],
 }
 
 /**
@@ -73,7 +74,7 @@ export function ContactShadows({ getSim }: { getSim: () => SimState | null }) {
         if (z < -110 || nb >= MAX_BOOKS) break
         const k = 1 / (1 + Math.max(0, b.y - 0.6) * 0.45)
         p.set(laneX(b.lane), 0.014, z)
-        sc.set(0.95 * k, 1, 0.75 * k)
+        sc.set(0.7 * k, 1, 0.58 * k)
         m.compose(p, q, sc)
         books.current.setMatrixAt(nb++, m)
       }

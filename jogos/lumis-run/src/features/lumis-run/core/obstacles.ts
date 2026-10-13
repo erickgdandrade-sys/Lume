@@ -2,7 +2,7 @@
  * Tipos de obstáculo. A colisão usa caixas alinhadas no espaço das faixas:
  * largura (uma faixa ou o corredor todo), altura (y0..y1) e profundidade.
  */
-export type ObstacleKind = 'livros' | 'carteira' | 'caixas' | 'carrinho' | 'barreira' | 'faixa'
+export type ObstacleKind = 'livros' | 'carteira' | 'caixas' | 'carrinho' | 'barreira' | 'faixa' | 'placa'
 export type Clear = 'pular' | 'deslizar' | 'nenhum'
 
 export interface ObstacleSpec {
@@ -20,6 +20,8 @@ export const OBSTACLES: Record<ObstacleKind, ObstacleSpec> = {
   carrinho: { span: 'faixa', y0: 0, y1: 1.7, depth: 1.0, clear: 'nenhum' },
   barreira: { span: 'todas', y0: 0, y1: 0.55, depth: 0.35, clear: 'pular' },
   faixa: { span: 'todas', y0: 1.0, y1: 4.4, depth: 0.3, clear: 'deslizar' },
+  // placa suspensa numa faixa só: passa deslizando por baixo
+  placa: { span: 'faixa', y0: 1.0, y1: 2.4, depth: 0.3, clear: 'deslizar' },
 }
 
 export const LANE_HALF = 0.85 // meia largura ocupada por um obstáculo de uma faixa

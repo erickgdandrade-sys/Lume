@@ -69,6 +69,50 @@ export function overlayWave(p: Pose, t: number) {
   return p
 }
 
+/**
+ * Troca de nível: a Lumis pula pela janela com uma cambalhota, vira para a
+ * câmera com cara de espanto, dá tchau e volta a correr. `t` é o tempo em
+ * relação ao momento em que ela passa pela janela.
+ */
+export const LEAP = { start: -0.55, end: 0.35, height: 1.35, turn: 0.35, surprise: 1.25, waveEnd: 2.45, back: 2.9 } as const
+
+export function overlayWindow(p: Pose, t: number) {
+  if (t < LEAP.start || t > LEAP.back) return p
+  if (t < LEAP.end) {
+    const k = (t - LEAP.start) / (LEAP.end - LEAP.start)
+    p.y += Math.sin(k * Math.PI) * LEAP.height
+    p.rx += TAU * easeInOut(k) // cambalhota para a frente
+    const take = k < 0.12 ? 1 - k / 0.12 : 0
+    p.sy *= 1 + 0.2 * take
+    p.sx *= 1 - 0.1 * take
+    p.sz *= 1 - 0.1 * take
+    p.expression = 'alegria'
+    return p
+  }
+  const u = t - LEAP.end
+  const turnIn = easeInOut(clamp01(u / LEAP.turn))
+  const turnOut = easeInOut(clamp01((t - LEAP.waveEnd) / (LEAP.back - LEAP.waveEnd)))
+  const face = turnIn * (1 - turnOut)
+  p.ry = lerp(p.ry, 0.15, face)
+  p.rx = lerp(p.rx, 0, face)
+  p.rz = lerp(p.rz, 0, face)
+  if (t < LEAP.surprise) {
+    // susto: dá um pulinho para trás e "arregala" o corpo
+    const s = clamp01((t - LEAP.end) / (LEAP.surprise - LEAP.end))
+    p.y += Math.sin(Math.min(1, s * 2) * Math.PI) * 0.22 * face
+    const st = Math.sin(s * Math.PI) * 0.08
+    p.sy *= 1 + st
+    p.sx *= 1 - st / 2
+    p.rx -= 0.18 * Math.sin(s * Math.PI) * face
+    p.expression = 'surpresa'
+    p.blink = 0
+  } else {
+    p.wave = waveAngle(t - LEAP.surprise) * envelope(t, LEAP.surprise, LEAP.waveEnd, 0.2) * face
+    p.expression = face > 0.5 ? 'alegria' : p.expression
+  }
+  return p
+}
+
 /** giro de alegria ao passar o recorde do evento */
 export function overlayTwirl(p: Pose, t: number) {
   const k = clamp01(t / TWIRL_TIME)

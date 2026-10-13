@@ -155,7 +155,7 @@ class SoundEngine {
 
   /** acelera a música conforme o nível (1 a 5) */
   setLevel(level: number) {
-    this.tempo = 1 + (level - 1) * 0.045
+    this.tempo = 1 + Math.min(level - 1, 8) * 0.025
   }
 
   private startScheduler() {

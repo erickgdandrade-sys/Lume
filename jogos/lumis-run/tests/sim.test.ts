@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { speedAt, DIFFICULTY, levelAt } from '../src/features/lumis-run/config/difficulty'
+import { speedAt, DIFFICULTY } from '../src/features/lumis-run/config/difficulty'
 import { laneX } from '../src/features/lumis-run/config/gameConfig'
 import { FixedStepper, STEP } from '../src/features/lumis-run/core/fixedStep'
 import { laneRequirements, rowIsFeasible } from '../src/features/lumis-run/core/generator'
@@ -165,8 +165,6 @@ describe('pontuação e dificuldade', () => {
     }
     expect(speedAt(10)).toBe(11)
     expect(speedAt(1000)).toBe(DIFFICULTY.maxSpeed)
-    expect(levelAt(0)).toBe(1)
-    expect(levelAt(130)).toBe(5)
   })
   it('reexecutar a semente com o registro de comandos reproduz a partida exatamente', () => {
     const live = createSim(987654)

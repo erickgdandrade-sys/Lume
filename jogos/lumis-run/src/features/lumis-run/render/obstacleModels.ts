@@ -1,3 +1,4 @@
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import * as THREE from 'three'
 import { BRAND } from '../config/palette'
 import type { ObstacleKind } from '../core/obstacles'
@@ -99,6 +100,26 @@ function banner(): THREE.BufferGeometry {
   return g.build()
 }
 
+function sign(): THREE.BufferGeometry {
+  // placa suspensa num cavalete, numa faixa só: obriga a deslizar por baixo
+  const g = new GeoBuilder()
+  const post = '#475569'
+  for (const x of [-0.8, 0.8]) {
+    g.box(0.08, 2.35, 0.08, post, [x, 1.175, 0])
+    g.box(0.12, 0.05, 0.6, post, [x, 0.025, 0])
+  }
+  g.box(1.68, 0.07, 0.08, post, [0, 2.36, 0])
+  g.box(1.5, 0.86, 0.08, B.laranja, [0, 1.52, 0])
+  g.box(1.36, 0.72, 0.09, '#FFF4E0', [0, 1.52, 0])
+  // listras de atenção e um "pare" estilizado
+  for (let i = 0; i < 5; i++) g.box(0.12, 0.72, 0.1, B.laranja, [-0.56 + i * 0.28, 1.52, 0], [0, 0, 0.5])
+  g.box(1.36, 0.36, 0.1, '#FFF4E0', [0, 1.52, 0.003])
+  g.cyl(0.13, 0.13, 0.11, B.rosa, [0, 1.52, 0.01], [Math.PI / 2, 0, 0], 8)
+  g.box(0.16, 0.04, 0.12, '#FFFFFF', [0, 1.52, 0.02])
+  for (const x of [-0.5, 0.5]) g.cyl(0.012, 0.012, 0.44, '#94A3B8', [x, 2.12, 0], undefined, 6)
+  return g.build()
+}
+
 export const OBSTACLE_MODELS: Record<ObstacleKind, () => THREE.BufferGeometry> = {
   livros: books,
   carteira: desk,
@@ -106,12 +127,33 @@ export const OBSTACLE_MODELS: Record<ObstacleKind, () => THREE.BufferGeometry> =
   carrinho: cart,
   barreira: barrier,
   faixa: banner,
+  placa: sign,
 }
 
 /** livro coletável: capa (colorida por instância) e miolo branco */
+/** pilha deitada de três livros: capas separadas (cada uma com sua cor) e miolo único */
+export const BOOK_STACK = [
+  { w: 0.5, d: 0.36, h: 0.085, y: 0.0425, ry: 0 },
+  { w: 0.46, d: 0.33, h: 0.075, y: 0.125, ry: 0.22 },
+  { w: 0.42, d: 0.3, h: 0.07, y: 0.2, ry: -0.15 },
+]
+
 export function collectibleBook() {
-  const cover = new THREE.BoxGeometry(0.58, 0.76, 0.14)
-  const pages = new THREE.BoxGeometry(0.53, 0.7, 0.15)
-  pages.translate(0.03, 0, 0)
-  return { cover, pages }
+  const covers = BOOK_STACK.map((k) => {
+    const g = new THREE.BoxGeometry(k.w, k.h, k.d)
+    g.rotateY(k.ry)
+    g.translate(0, k.y - 0.12, 0)
+    return g
+  })
+  const pages = mergeGeometries(
+    BOOK_STACK.map((k) => {
+      const g = new THREE.BoxGeometry(k.w - 0.05, k.h * 0.8, k.d - 0.02)
+      g.translate(0.035, 0, 0)
+      g.rotateY(k.ry)
+      g.translate(0, k.y - 0.12, 0)
+      return g
+    }),
+    false,
+  )!
+  return { covers, pages }
 }

@@ -1,4 +1,5 @@
-import { bookChanceAt, DIFFICULTY, gapTimeAt, speedAt, tierWeightsAt } from '../config/difficulty'
+import { bookRulesAt, DIFFICULTY, gapTimeAt, speedAt, tierWeightsAt, type TierWeights } from '../config/difficulty'
+import { clearZone, levelAtDistance } from './levels'
 import { OBSTACLES, type Book, type Obstacle, type ObstacleKind } from './obstacles'
 
 /**
@@ -77,16 +78,29 @@ export function makeRow(tier: number, rng: () => number): Item[] {
     if (r < 0.85) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }]
     return [{ kind: 'barreira', lane: 1 }]
   }
+  if (tier === 2) {
+    const r = rng()
+    if (r < 0.4) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
+    if (r < 0.6) return [{ kind: pick(rng, ONE_LANE_LOW), lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
+    if (r < 0.72) return [{ kind: 'faixa', lane: 1 }]
+    if (r < 0.86) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: 'placa', lane: b }]
+    return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }]
+  }
+  // caminhos difíceis: uma única saída, ou saídas que pedem ações diferentes
   const r = rng()
-  if (r < 0.45) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
-  if (r < 0.7) return [{ kind: pick(rng, ONE_LANE_LOW), lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
-  if (r < 0.85) return [{ kind: 'faixa', lane: 1 }]
-  return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }]
+  if (r < 0.3) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }, { kind: 'placa', lane: c }]
+  if (r < 0.6) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: 'placa', lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
+  if (r < 0.8) return [{ kind: 'placa', lane: a }, { kind: 'placa', lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
+  return [{ kind: 'placa', lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }]
 }
 
-function pickTier(w: [number, number, number], rng: () => number) {
-  const r = rng() * (w[0] + w[1] + w[2])
-  return r < w[0] ? 0 : r < w[0] + w[1] ? 1 : 2
+function pickTier(w: TierWeights, rng: () => number) {
+  let r = rng() * (w[0] + w[1] + w[2] + w[3])
+  for (let i = 0; i < 3; i++) {
+    if (r < w[i]) return i
+    r -= w[i]
+  }
+  return 3
 }
 
 export interface GenState {
@@ -103,8 +117,8 @@ export function createGen(rng: () => number): GenState {
   return { rng, nextD: DIFFICULTY.warmupDistance, prevReq: ['livre', 'livre', 'livre'], prevD: 0, ids: 1, obstacles: [], books: [] }
 }
 
-function addBookLine(g: GenState, lane: number, d0: number, d1: number, y: number) {
-  const n = Math.max(2, Math.min(6, Math.floor((d1 - d0) / 2.2)))
+function addBookLine(g: GenState, lane: number, d0: number, d1: number, y: number, max = 6) {
+  const n = Math.max(2, Math.min(max, Math.floor((d1 - d0) / 2.2)))
   for (let i = 0; i < n; i++) {
     const d = d0 + ((d1 - d0) * i) / Math.max(1, n - 1)
     g.books.push({ id: g.ids++, lane, d, y, taken: false, color: Math.floor(g.rng() * 6) })
@@ -124,6 +138,17 @@ export function fillUntil(g: GenState, ahead: number, t: number) {
   while (g.nextD < ahead) {
     const speed = speedAt(t)
     const gapTime = gapTimeAt(t)
+    // trecho livre para a Lumis atravessar a janela do próximo nível
+    const level = levelAtDistance(g.nextD)
+    const [z0, z1] = clearZone(level + 1, speedAt(t + 14))
+    const [, c1] = level > 1 ? clearZone(level, speedAt(t + 14)) : [0, 0]
+    const zoneEnd = g.nextD >= z0 ? z1 : g.nextD < c1 ? c1 : 0
+    if (zoneEnd) {
+      g.nextD = zoneEnd
+      g.prevD = zoneEnd - 30
+      g.prevReq = ['livre', 'livre', 'livre']
+      continue
+    }
     const gap = g.nextD - g.prevD
     const tier = pickTier(tierWeightsAt(t), g.rng)
     let items: Item[] | null = null
@@ -138,33 +163,50 @@ export function fillUntil(g: GenState, ahead: number, t: number) {
     }
     if (!items) {
       // nenhuma fileira cabe nesse espaço: avança sem obstáculo
-      g.nextD += gap * 0.5
+      g.nextD += Math.max(2, gap * 0.5)
       g.prevReq = ['livre', 'livre', 'livre']
       continue
     }
     const d = g.nextD
     for (const it of items) g.obstacles.push({ id: g.ids++, kind: it.kind, lane: it.lane, d, variant: Math.floor(g.rng() * 4) })
-
-    // livros: uma trilha na faixa de saída, e um arco quando a saída é por pulo
-    if (g.rng() < bookChanceAt(t)) {
-      const open = [0, 1, 2].filter((l) => req[l] !== 'bloq')
-      const lane = open[Math.floor(g.rng() * open.length)]
-      const r = req[lane]
-      if (r === 'pular') {
-        g.books.push({ id: g.ids++, lane, d: d - 2.2, y: 1.9, taken: false, color: Math.floor(g.rng() * 6) })
-        g.books.push({ id: g.ids++, lane, d, y: 2.45, taken: false, color: Math.floor(g.rng() * 6) })
-        g.books.push({ id: g.ids++, lane, d: d + 2.2, y: 1.9, taken: false, color: Math.floor(g.rng() * 6) })
-      } else if (r === 'deslizar') {
-        addBookLine(g, lane, d - 1.5, d + 1.5, 0.45)
-      } else {
-        addBookLine(g, lane, d - Math.min(10, gap * 0.6), d + 1, 1.0)
-      }
-    }
+    addBooks(g, req, d, gap, bookRulesAt(level))
 
     g.books.sort((a, b) => a.d - b.d)
     g.prevReq = req
     g.prevD = d
     g.nextD = d + gapTime * speed * (1 + g.rng() * 0.4)
+  }
+}
+
+/**
+ * Livros de uma fileira. Nos primeiros níveis: trilha na faixa de saída ou
+ * arco por cima do obstáculo. Depois, ficam mais raros e mais arriscados.
+ */
+function addBooks(g: GenState, req: LaneReq[], d: number, gap: number, rules: ReturnType<typeof bookRulesAt>) {
+  if (g.rng() >= rules.chance) return
+  const open = [0, 1, 2].filter((l) => req[l] !== 'bloq')
+  const risky = g.rng() < rules.risky
+  // arriscado: prefere a faixa que pede pulo ou deslize
+  const action = open.filter((l) => req[l] !== 'livre')
+  const pool = risky && action.length ? action : open
+  const lane = pool[Math.floor(g.rng() * pool.length)]
+  const r = req[lane]
+  const color = () => Math.floor(g.rng() * 6)
+  if (r === 'pular') {
+    if (risky) g.books.push({ id: g.ids++, lane, d, y: 2.45, taken: false, color: color() })
+    else {
+      g.books.push({ id: g.ids++, lane, d: d - 2.2, y: 1.9, taken: false, color: color() })
+      g.books.push({ id: g.ids++, lane, d, y: 2.45, taken: false, color: color() })
+      g.books.push({ id: g.ids++, lane, d: d + 2.2, y: 1.9, taken: false, color: color() })
+    }
+  } else if (r === 'deslizar') {
+    if (risky) g.books.push({ id: g.ids++, lane, d, y: 0.45, taken: false, color: color() })
+    else addBookLine(g, lane, d - 1.5, d + 1.5, 0.45)
+  } else if (risky) {
+    // livro no alto, bem ao lado dos obstáculos: precisa pular na hora certa
+    g.books.push({ id: g.ids++, lane, d, y: 2.3, taken: false, color: color() })
+  } else {
+    addBookLine(g, lane, d - Math.min(10, gap * 0.6), d + 1, 1.0, rules.maxLine)
   }
 }
 

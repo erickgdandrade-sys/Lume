@@ -1,4 +1,4 @@
-import { levelAt } from './config/difficulty'
+import { levelStart, TRANSITION, visualLevelAt, visualStart } from './core/levels'
 import { FixedStepper } from './core/fixedStep'
 import { command, createSim, scoreOf, step, type Command, type SimState } from './core/sim'
 import type { InputAction, InputDevice } from './input/actions'
@@ -88,22 +88,25 @@ class GameSession {
     const record = ranking.byScore()[0]?.score ?? null
     this.offset = this.viewDistance
     // partida oficial usa a semente de um bilhete do servidor (ranking online)
+    // treino a partir de um nível (?nivel=N): não vale para o ranking
+    const practice = practiceStart()
+    if (practice > 0) demo = true
     this.ticket = demo ? null : ranking.takeTicket()
-    this.sim = createSim(this.ticket?.seed ?? newSeed())
+    this.sim = createSim(this.ticket?.seed ?? newSeed(), practice)
     this.queue = []
     this.log = []
     this.stepper.reset()
     this.phase = 'countdown'
     this.phaseTime = 0
     this.runToken++
-    this.level = 1
+    this.level = this.levelNow()
     this.levelUpClock = this.recordClock = 99
     this.recordBeaten = false
     sound.setLevel(1)
     sound.duck(false)
     sound.music(null)
     sound.play('count')
-    useUi.getState().set({ demo, record, result: null, pauseReason: null, countdown: COUNTDOWN, hud: { score: 0, books: 0, time: 0, level: 1 } })
+    useUi.getState().set({ demo, record, result: null, pauseReason: null, countdown: COUNTDOWN, hud: { score: 0, books: 0, time: 0, level: this.level } })
     this.go('contagem')
   }
 
@@ -206,7 +209,7 @@ class GameSession {
       s.events.length = 0
       this.levelUpClock += dt
       this.recordClock += dt
-      const lvl = levelAt(s.time)
+      const lvl = this.levelNow()
       if (lvl > this.level && !s.crashed) {
         this.level = lvl
         this.levelUpClock = 0
@@ -223,7 +226,7 @@ class GameSession {
       this.hudTimer += dt
       if (this.hudTimer >= 0.1 || s.crashed) {
         this.hudTimer = 0
-        useUi.getState().set({ hud: { score: scoreOf(s), books: s.books, time: s.time, level: levelAt(s.time) } })
+        useUi.getState().set({ hud: { score: scoreOf(s), books: s.books, time: s.time, level: this.level } })
       }
       if (s.crashed) {
         this.phase = 'crashed'
@@ -291,6 +294,50 @@ class GameSession {
   get viewDistance() {
     return this.sim ? this.sim.distance + this.offset : this.idleDistance
   }
+
+  /** quanto o corredor do menu já tinha andado quando a partida começou */
+  get viewOffset() {
+    return this.offset
+  }
+
+  /** nível atual: muda quando a Lumis atravessa a janela */
+  levelNow() {
+    const s = this.sim
+    return s ? visualLevelAt(s.distance + this.offset, this.offset) : 1
+  }
+
+  /**
+   * Transição de nível em andamento: segundos desde que a Lumis passou pela
+   * janela (negativo antes dela chegar), ou null fora da transição.
+   */
+  transition(): { level: number; t: number } | null {
+    const s = this.sim
+    if (!s || this.phase === 'idle' || s.speed <= 0) return null
+    const lv = this.levelNow()
+    for (const n of [lv + 1, lv]) {
+      if (n < 2) continue
+      const t = (s.distance - (visualStart(n, this.offset) - this.offset)) / s.speed
+      if (t >= TRANSITION.leapStart - 0.6 && t <= TRANSITION.greetEnd) return { level: n, t }
+    }
+    return null
+  }
+}
+
+/**
+ * Treino e conferência dos cenários (não vale para o ranking):
+ * ?nivel=N começa pouco antes da janela do nível N; ?cenario=N, já dentro dele.
+ */
+function practiceStart() {
+  try {
+    const q = new URLSearchParams(location.search)
+    const n = Number(q.get('nivel'))
+    if (Number.isInteger(n) && n > 1 && n < 100) return levelStart(n) - 25
+    const c = Number(q.get('cenario'))
+    if (Number.isInteger(c) && c >= 1 && c < 100) return levelStart(c) + 70
+  } catch {
+    // sem URL (testes)
+  }
+  return 0
 }
 
 function newSeed() {

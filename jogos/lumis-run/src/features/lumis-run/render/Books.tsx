@@ -10,18 +10,20 @@ import { radialTexture } from './lumisGeometry'
 const MAX = 48
 const COLORS = [BRAND.azul, BRAND.rosa, BRAND.amarelo, BRAND.verde, BRAND.roxo, BRAND.laranja].map((c) => new THREE.Color(c))
 
-/** Livros flutuantes coletáveis: giram, flutuam e têm um brilho suave. */
+/** Pilhas de livros coletáveis (deitadas e pequenas): giram, flutuam e têm um brilho suave. */
 export function Books({ getSim }: { getSim: () => SimState | null }) {
-  const covers = useRef<THREE.InstancedMesh>(null!)
+  const c0 = useRef<THREE.InstancedMesh>(null!)
+  const c1 = useRef<THREE.InstancedMesh>(null!)
+  const c2 = useRef<THREE.InstancedMesh>(null!)
   const pages = useRef<THREE.InstancedMesh>(null!)
   const glows = useRef<THREE.InstancedMesh>(null!)
   const res = useMemo(() => {
-    const { cover, pages } = collectibleBook()
+    const { covers, pages } = collectibleBook()
     const coverMat = new THREE.MeshStandardMaterial({ roughness: 0.45, emissive: '#ffffff', emissiveIntensity: 0.08 })
     const pageMat = new THREE.MeshStandardMaterial({ color: '#FFFDF2', roughness: 0.8 })
-    const glowGeo = new THREE.PlaneGeometry(1.05, 1.05)
-    const glowMat = new THREE.MeshBasicMaterial({ map: radialTexture('rgba(255,226,120,0.38)', 'rgba(255,226,120,0)'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
-    return { cover, pages, coverMat, pageMat, glowGeo, glowMat }
+    const glowGeo = new THREE.PlaneGeometry(0.8, 0.8)
+    const glowMat = new THREE.MeshBasicMaterial({ map: radialTexture('rgba(255,226,120,0.32)', 'rgba(255,226,120,0)'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+    return { covers, pages, coverMat, pageMat, glowGeo, glowMat }
   }, [])
   const m = useMemo(() => new THREE.Matrix4(), [])
   const q = useMemo(() => new THREE.Quaternion(), [])
@@ -40,12 +42,15 @@ export function Books({ getSim }: { getSim: () => SimState | null }) {
         if (z > 3) continue
         if (z < -110 || n >= MAX) break
         p.set(laneX(b.lane), b.y + Math.sin(t * 2.4 + b.id) * 0.08, z)
-        e.set(0.15, t * 2.2 + b.id * 0.7, 0)
+        e.set(0.12, t * 1.8 + b.id * 0.7, 0)
         q.setFromEuler(e)
         m.compose(p, q, sc)
-        covers.current.setMatrixAt(n, m)
+        const cov = [c0.current, c1.current, c2.current]
+        cov.forEach((c, i) => {
+          c.setMatrixAt(n, m)
+          c.setColorAt(n, COLORS[(b.color + i * 2) % COLORS.length])
+        })
         pages.current.setMatrixAt(n, m)
-        covers.current.setColorAt(n, COLORS[b.color % COLORS.length])
         // brilho voltado para a câmera
         q.identity()
         m.compose(p, q, sc)
@@ -53,17 +58,20 @@ export function Books({ getSim }: { getSim: () => SimState | null }) {
         n++
       }
     }
-    for (const mesh of [covers.current, pages.current, glows.current]) {
+    const cov = [c0.current, c1.current, c2.current]
+    for (const mesh of [...cov, pages.current, glows.current]) {
       mesh.count = n
       mesh.instanceMatrix.needsUpdate = true
     }
-    if (covers.current.instanceColor) covers.current.instanceColor.needsUpdate = true
+    for (const c of cov) if (c.instanceColor) c.instanceColor.needsUpdate = true
   })
 
   return (
     <group>
       <instancedMesh ref={glows} args={[res.glowGeo, res.glowMat, MAX]} frustumCulled={false} renderOrder={4} />
-      <instancedMesh ref={covers} args={[res.cover, res.coverMat, MAX]} frustumCulled={false} castShadow />
+      {[c0, c1, c2].map((r, i) => (
+        <instancedMesh key={i} ref={r} args={[res.covers[i], res.coverMat, MAX]} frustumCulled={false} castShadow />
+      ))}
       <instancedMesh ref={pages} args={[res.pages, res.pageMat, MAX]} frustumCulled={false} />
     </group>
   )

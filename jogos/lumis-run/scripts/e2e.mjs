@@ -5,9 +5,10 @@ const out = process.argv[2] || 'e2e'
 const url = process.argv[3] || 'http://localhost:4173/'
 const results = []
 const check = (name, ok, extra = '') => results.push(`${ok ? 'PASSOU' : 'FALHOU'}  ${name}${extra ? ' — ' + extra : ''}`)
+process.on('uncaughtException', (e) => { console.log(results.join('\n')); console.log('ERRO:', e.message.split('\n')[0]); process.exit(1) })
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] })
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+const page = await browser.newPage({ viewport: { width: Number(process.env.E2E_W || 1280), height: Number(process.env.E2E_H || 720) } })
 const errors = []
 page.on('pageerror', (e) => errors.push(e.message))
 await page.addInitScript(() => {
@@ -65,7 +66,9 @@ check('contagem toca bipes e para a música do menu', (await audio())?.stats?.co
 await wait(200)
 check('JOGAR começa a contagem direto, sem pedir nome', /Prepare-se!/.test(await text()) && !/Qual é o seu nome/.test(await text()))
 await page.screenshot({ path: `${out}/02-contagem.png` })
-await wait(4000)
+// a contagem anda no tempo do jogo; em máquinas lentas (renderização por software) ela demora mais
+for (let i = 0; i < 40 && !/pontos/i.test(await text()); i++) await wait(250)
+await wait(600)
 const t1 = await text()
 check('HUD com pontos e controles à esquerda', /pontos/i.test(t1) && /Trocar de faixa/.test(t1))
 const a1 = await audio()
@@ -78,7 +81,8 @@ await page.keyboard.press('Escape')
 await wait(600)
 check('Esc pausa', /Pausado/i.test(await text()))
 await page.keyboard.press('Enter')
-await wait(3500)
+for (let i = 0; i < 48 && /Pausado|^\s*[123]\s*$/m.test(await text()); i++) await wait(250)
+await wait(300)
 check('Continuar volta ao jogo', /pontos/i.test(await text()) && !/Pausado/i.test(await text()))
 check('colisão encerra a partida e mostra o resultado', await waitOver('04-corrida.png'))
 const a2 = await audio()
@@ -302,7 +306,8 @@ check('pausa tem o botão de música', /Música: ligada/.test(tp))
 await page.evaluate(() => { window.__padOn = true })
 await wait(600)
 await padPress(0)
-await wait(3000)
+for (let i = 0; i < 48 && /Pausado|^\s*[123]\s*$/m.test(await text()); i++) await wait(250)
+await wait(300)
 check('reconectar e apertar A continua a partida', /pontos/i.test(await text()) && !/Pausado/i.test(await text()))
 check('partida com controle termina', await waitOver())
 await wait(800)

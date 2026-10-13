@@ -7,6 +7,15 @@ var LANES = {
   // distância entre os centros das faixas (m)
 };
 var laneX = (lane) => (lane - 1) * LANES.width;
+var CORRIDOR = {
+  width: 9.6,
+  // de parede a parede (m)
+  height: 4.4,
+  segmentLength: 16,
+  segmentsAhead: 8,
+  // quantos segmentos ficam visíveis à frente
+  segmentsBehind: 1
+};
 var SIM = {
   stepHz: 120,
   maxFrameDelta: 0.1
@@ -32,19 +41,14 @@ var DIFFICULTY = {
     [100, 0.82],
     [160, 0.72]
   ],
-  // pesos dos níveis de padrão [tier1, tier2, tier3]
+  // pesos dos níveis de padrão [tier1, tier2, tier3, tier4 (combinações difíceis)]
   tierKeys: [
-    [0, [1, 0, 0]],
-    [15, [0.75, 0.25, 0]],
-    [45, [0.45, 0.45, 0.1]],
-    [75, [0.3, 0.45, 0.25]],
-    [120, [0.2, 0.4, 0.4]]
-  ],
-  // chance de colocar livros antes de cada fileira
-  bookKeys: [
-    [0, 0.9],
-    [60, 0.75],
-    [120, 0.6]
+    [0, [1, 0, 0, 0]],
+    [15, [0.75, 0.25, 0, 0]],
+    [45, [0.45, 0.45, 0.1, 0]],
+    [75, [0.3, 0.4, 0.22, 0.08]],
+    [120, [0.15, 0.35, 0.3, 0.2]],
+    [180, [0.1, 0.25, 0.35, 0.3]]
   ],
   warmupDistance: 45
   // metros iniciais sem obstáculos
@@ -60,21 +64,51 @@ function interp(keys, t) {
 }
 var speedAt = (t) => Math.min(DIFFICULTY.maxSpeed, interp(DIFFICULTY.speedKeys, t));
 var gapTimeAt = (t) => interp(DIFFICULTY.gapKeys, t);
-var bookChanceAt = (t) => interp(DIFFICULTY.bookKeys, t);
 function tierWeightsAt(t) {
   const k = DIFFICULTY.tierKeys;
   if (t <= k[0][0]) return [...k[0][1]];
   for (let i = 1; i < k.length; i++) {
     if (t <= k[i][0]) {
       const f = (t - k[i - 1][0]) / (k[i][0] - k[i - 1][0]);
-      return [0, 1, 2].map((j) => k[i - 1][1][j] + (k[i][1][j] - k[i - 1][1][j]) * f);
+      return [0, 1, 2, 3].map((j) => k[i - 1][1][j] + (k[i][1][j] - k[i - 1][1][j]) * f);
     }
   }
   return [...k[k.length - 1][1]];
 }
+function bookRulesAt(level) {
+  if (level <= 2) return { chance: 0.9, maxLine: 6, risky: 0 };
+  if (level <= 4) return { chance: 0.78, maxLine: 4, risky: 0.35 };
+  if (level <= 6) return { chance: 0.65, maxLine: 3, risky: 0.6 };
+  return { chance: 0.55, maxLine: 2, risky: 0.8 };
+}
 
 // src/features/lumis-run/core/fixedStep.ts
 var STEP = 1 / SIM.stepHz;
+
+// src/features/lumis-run/core/levels.ts
+var levelLength = (n) => Math.min(22, 11 + n) * CORRIDOR.segmentLength;
+var starts = [0, 0];
+function levelStart(n) {
+  while (starts.length <= n) {
+    const m = starts.length;
+    starts.push(starts[m - 1] + levelLength(m - 1));
+  }
+  return starts[n];
+}
+function levelAtDistance(d) {
+  let n = 1;
+  while (levelStart(n + 1) <= d) n++;
+  return n;
+}
+var TRANSITION = {
+  leapStart: -0.55,
+  leapEnd: 0.35,
+  greetEnd: 2.9
+};
+function clearZone(n, v) {
+  const b = levelStart(n);
+  return [b + TRANSITION.leapStart * v - 5, b + CORRIDOR.segmentLength + TRANSITION.greetEnd * v + 6];
+}
 
 // src/features/lumis-run/core/obstacles.ts
 var OBSTACLES = {
@@ -83,7 +117,9 @@ var OBSTACLES = {
   caixas: { span: "faixa", y0: 0, y1: 2, depth: 0.9, clear: "nenhum" },
   carrinho: { span: "faixa", y0: 0, y1: 1.7, depth: 1, clear: "nenhum" },
   barreira: { span: "todas", y0: 0, y1: 0.55, depth: 0.35, clear: "pular" },
-  faixa: { span: "todas", y0: 1, y1: 4.4, depth: 0.3, clear: "deslizar" }
+  faixa: { span: "todas", y0: 1, y1: 4.4, depth: 0.3, clear: "deslizar" },
+  // placa suspensa numa faixa só: passa deslizando por baixo
+  placa: { span: "faixa", y0: 1, y1: 2.4, depth: 0.3, clear: "deslizar" }
 };
 var LANE_HALF = 0.85;
 var ALL_HALF = 3.4;
@@ -149,21 +185,33 @@ function makeRow(tier, rng) {
     if (r2 < 0.85) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }];
     return [{ kind: "barreira", lane: 1 }];
   }
+  if (tier === 2) {
+    const r2 = rng();
+    if (r2 < 0.4) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
+    if (r2 < 0.6) return [{ kind: pick(rng, ONE_LANE_LOW), lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
+    if (r2 < 0.72) return [{ kind: "faixa", lane: 1 }];
+    if (r2 < 0.86) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: "placa", lane: b }];
+    return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }];
+  }
   const r = rng();
-  if (r < 0.45) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
-  if (r < 0.7) return [{ kind: pick(rng, ONE_LANE_LOW), lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
-  if (r < 0.85) return [{ kind: "faixa", lane: 1 }];
-  return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }];
+  if (r < 0.3) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: pick(rng, ONE_LANE_TALL), lane: b }, { kind: "placa", lane: c }];
+  if (r < 0.6) return [{ kind: pick(rng, ONE_LANE_TALL), lane: a }, { kind: "placa", lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
+  if (r < 0.8) return [{ kind: "placa", lane: a }, { kind: "placa", lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
+  return [{ kind: "placa", lane: a }, { kind: pick(rng, ONE_LANE_LOW), lane: b }, { kind: pick(rng, ONE_LANE_LOW), lane: c }];
 }
 function pickTier(w, rng) {
-  const r = rng() * (w[0] + w[1] + w[2]);
-  return r < w[0] ? 0 : r < w[0] + w[1] ? 1 : 2;
+  let r = rng() * (w[0] + w[1] + w[2] + w[3]);
+  for (let i = 0; i < 3; i++) {
+    if (r < w[i]) return i;
+    r -= w[i];
+  }
+  return 3;
 }
 function createGen(rng) {
   return { rng, nextD: DIFFICULTY.warmupDistance, prevReq: ["livre", "livre", "livre"], prevD: 0, ids: 1, obstacles: [], books: [] };
 }
-function addBookLine(g, lane, d0, d1, y) {
-  const n = Math.max(2, Math.min(6, Math.floor((d1 - d0) / 2.2)));
+function addBookLine(g, lane, d0, d1, y, max = 6) {
+  const n = Math.max(2, Math.min(max, Math.floor((d1 - d0) / 2.2)));
   for (let i = 0; i < n; i++) {
     const d = d0 + (d1 - d0) * i / Math.max(1, n - 1);
     g.books.push({ id: g.ids++, lane, d, y, taken: false, color: Math.floor(g.rng() * 6) });
@@ -176,6 +224,16 @@ function fillUntil(g, ahead, t) {
   while (g.nextD < ahead) {
     const speed = speedAt(t);
     const gapTime = gapTimeAt(t);
+    const level = levelAtDistance(g.nextD);
+    const [z0, z1] = clearZone(level + 1, speedAt(t + 14));
+    const [, c1] = level > 1 ? clearZone(level, speedAt(t + 14)) : [0, 0];
+    const zoneEnd = g.nextD >= z0 ? z1 : g.nextD < c1 ? c1 : 0;
+    if (zoneEnd) {
+      g.nextD = zoneEnd;
+      g.prevD = zoneEnd - 30;
+      g.prevReq = ["livre", "livre", "livre"];
+      continue;
+    }
     const gap = g.nextD - g.prevD;
     const tier = pickTier(tierWeightsAt(t), g.rng);
     let items = null;
@@ -189,30 +247,42 @@ function fillUntil(g, ahead, t) {
       }
     }
     if (!items) {
-      g.nextD += gap * 0.5;
+      g.nextD += Math.max(2, gap * 0.5);
       g.prevReq = ["livre", "livre", "livre"];
       continue;
     }
     const d = g.nextD;
     for (const it of items) g.obstacles.push({ id: g.ids++, kind: it.kind, lane: it.lane, d, variant: Math.floor(g.rng() * 4) });
-    if (g.rng() < bookChanceAt(t)) {
-      const open = [0, 1, 2].filter((l) => req[l] !== "bloq");
-      const lane = open[Math.floor(g.rng() * open.length)];
-      const r = req[lane];
-      if (r === "pular") {
-        g.books.push({ id: g.ids++, lane, d: d - 2.2, y: 1.9, taken: false, color: Math.floor(g.rng() * 6) });
-        g.books.push({ id: g.ids++, lane, d, y: 2.45, taken: false, color: Math.floor(g.rng() * 6) });
-        g.books.push({ id: g.ids++, lane, d: d + 2.2, y: 1.9, taken: false, color: Math.floor(g.rng() * 6) });
-      } else if (r === "deslizar") {
-        addBookLine(g, lane, d - 1.5, d + 1.5, 0.45);
-      } else {
-        addBookLine(g, lane, d - Math.min(10, gap * 0.6), d + 1, 1);
-      }
-    }
+    addBooks(g, req, d, gap, bookRulesAt(level));
     g.books.sort((a, b) => a.d - b.d);
     g.prevReq = req;
     g.prevD = d;
     g.nextD = d + gapTime * speed * (1 + g.rng() * 0.4);
+  }
+}
+function addBooks(g, req, d, gap, rules) {
+  if (g.rng() >= rules.chance) return;
+  const open = [0, 1, 2].filter((l) => req[l] !== "bloq");
+  const risky = g.rng() < rules.risky;
+  const action = open.filter((l) => req[l] !== "livre");
+  const pool = risky && action.length ? action : open;
+  const lane = pool[Math.floor(g.rng() * pool.length)];
+  const r = req[lane];
+  const color = () => Math.floor(g.rng() * 6);
+  if (r === "pular") {
+    if (risky) g.books.push({ id: g.ids++, lane, d, y: 2.45, taken: false, color: color() });
+    else {
+      g.books.push({ id: g.ids++, lane, d: d - 2.2, y: 1.9, taken: false, color: color() });
+      g.books.push({ id: g.ids++, lane, d, y: 2.45, taken: false, color: color() });
+      g.books.push({ id: g.ids++, lane, d: d + 2.2, y: 1.9, taken: false, color: color() });
+    }
+  } else if (r === "deslizar") {
+    if (risky) g.books.push({ id: g.ids++, lane, d, y: 0.45, taken: false, color: color() });
+    else addBookLine(g, lane, d - 1.5, d + 1.5, 0.45);
+  } else if (risky) {
+    g.books.push({ id: g.ids++, lane, d, y: 2.3, taken: false, color: color() });
+  } else {
+    addBookLine(g, lane, d - Math.min(10, gap * 0.6), d + 1, 1, rules.maxLine);
   }
 }
 function prune(g, distance) {
@@ -260,16 +330,22 @@ var HITBOX = {
   slideTop: 0.72
 };
 var AHEAD = 140;
-function createSim(seed) {
+function createSim(seed, startDistance = 0) {
   const gen = createGen(mulberry32(seed));
-  warmupBooks(gen);
-  fillUntil(gen, AHEAD, 0);
+  let tick = 0;
+  let distance = 0;
+  while (distance < startDistance) distance += speedAt(++tick * STEP) * STEP;
+  if (startDistance > 0) {
+    gen.prevD = distance;
+    gen.nextD = distance + 30;
+  } else warmupBooks(gen);
+  fillUntil(gen, distance + AHEAD, tick * STEP);
   return {
     seed,
-    tick: 0,
-    time: 0,
-    distance: 0,
-    speed: speedAt(0),
+    tick,
+    time: tick * STEP,
+    distance,
+    speed: speedAt(tick * STEP),
     lane: 1,
     x: 0,
     xFrom: 0,
