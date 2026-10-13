@@ -308,3 +308,19 @@ html.lr-page body { user-select: auto; -webkit-user-select: auto; }
 .lr-insta-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #c1357a; }
 .lr-share-warn { width: min(100%, 340px); margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; background: #fff7d6; color: #6b4e00; font-size: 14px; line-height: 1.5; }
 .lr-share-page .lr-link { margin-top: 2px; font-size: 14px; color: var(--ink-2); }
+
+/* Ranking online: estado da conexão, envio e partidas em análise */
+.lr-conn { display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
+.lr-conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #9ca3af; flex: none; }
+.lr-conn.is-online .lr-conn-dot { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+.lr-conn.is-offline .lr-conn-dot { background: #f59e0b; }
+.lr-rank-head .lr-conn { margin: 0; }
+.lr-saving { display: grid; justify-items: start; gap: 8px; }
+.lr-spinner { width: 34px; height: 34px; border-radius: 50%; border: 4px solid rgba(59,130,246,0.2); border-top-color: #3b82f6; animation: lr-spin 0.9s linear infinite; }
+@keyframes lr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lr-spinner { animation-duration: 3s; } }
+.lr-review { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: #fff7d6; }
+.lr-review .lr-staff-h3 { margin-top: 0; }
+.lr-review-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.lr-review-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; font-size: 14px; }
+.lr-review-actions { display: inline-flex; gap: 8px; }

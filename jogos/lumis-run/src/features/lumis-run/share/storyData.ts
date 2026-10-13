@@ -11,6 +11,8 @@ export interface StoryData {
   distance: number
   posScore: number | null
   posBooks: number | null
+  /** imagem oficial da Lumis sorteada para a arte (índice em POSES) */
+  pose?: number
 }
 
 const int = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0)
@@ -33,6 +35,7 @@ export function encodeStory(d: StoryData) {
   const o: Record<string, unknown> = { v: 1, n: d.name, s: d.score, b: d.books, d: d.distance }
   if (d.posScore) o.p = d.posScore
   if (d.posBooks) o.l = d.posBooks
+  if (d.pose != null) o.o = d.pose
   return toB64Url(JSON.stringify(o))
 }
 
@@ -49,6 +52,7 @@ export function decodeStory(code: string): StoryData | null {
       distance: int(o.d, 9_999_999),
       posScore: pos(o.p),
       posBooks: pos(o.l),
+      ...(typeof o.o === 'number' && Number.isInteger(o.o) && o.o >= 0 && o.o < 64 ? { pose: o.o } : {}),
     }
   } catch {
     return null

@@ -14,13 +14,13 @@ export const BRAND = {
 // Lumis conforme o modelo oficial: amarelo-limão fosco, olhos pretos,
 // boca escura com língua rosa e bochechas rosadas.
 export const LUMIS_COLORS = {
-  body: '#FEDC69',
-  bodyEmissive: '#FFE58A',
+  body: '#FFD633',
+  bodyEmissive: '#FFC800',
   eye: '#111111',
   highlight: '#FFFFFF',
-  mouth: '#3A1A1A',
-  tongue: '#F27A8E',
-  cheek: '#F9A8B8',
+  mouth: '#2B0F0F',
+  tongue: '#F06A7A',
+  cheek: '#FF9E8A',
 } as const
 
 // Versões pastel das cores da marca, usadas em armários, portas e murais

@@ -8,13 +8,14 @@ import { computePose, type Expression } from './lumisPose'
  * Modo de "foto" usado só na produção de assets (?lumis-foto=alegria):
  * a Lumis sozinha em fundo transparente, para a arte dos stories.
  */
-export function LumisPhoto({ expression, wave = 0 }: { expression: Expression; wave?: number }) {
+export function LumisPhoto({ expression, wave = 0, front = false }: { expression: Expression; wave?: number; front?: boolean }) {
   const driver = {
     read: () => {
       const pose = computePose('menu', 0, 0)
-      pose.ry = -0.32
-      pose.rz = 0.1
-      pose.rx = -0.05
+      // de frente (comparar com as imagens oficiais) ou em 3/4 (arte)
+      pose.ry = front ? 0 : -0.32
+      pose.rz = front ? 0 : 0.1
+      pose.rx = front ? 0 : -0.05
       pose.y = LUMIS.hoverHeight
       pose.blink = 0
       pose.wave = wave

@@ -2,7 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { InputAction } from '../input/actions'
 import { sound } from '../audio/sound'
 import { input } from '../input/inputManager'
-import { ranking } from '../ranking/ranking'
+import { ranking } from '../ranking/store'
 
 /** escuta ações enquanto o componente estiver montado */
 export function useInputAction(fn: (a: InputAction) => void, enabled = true) {
@@ -48,6 +48,14 @@ export function useMenuNav(container: React.RefObject<HTMLElement | null>, opts:
 export function useRanking(kind: 'pontos' | 'livros' = 'pontos') {
   const get = kind === 'pontos' ? () => ranking.byScore() : () => ranking.byBooks()
   return useSyncExternalStore((cb) => ranking.subscribe(cb), get, get)
+}
+
+/** estado da conexão do ranking online e partidas guardadas sem internet */
+export function useConnection() {
+  const get = () => `${ranking.connection()}|${ranking.pending()}`
+  const v = useSyncExternalStore((cb) => ranking.subscribe(cb), get, get)
+  const [conn, pending] = v.split('|')
+  return { conn: conn as ReturnType<typeof ranking.connection>, pending: Number(pending), online: ranking.online }
 }
 
 export const fmt = (n: number) => Math.floor(n).toLocaleString('pt-BR')

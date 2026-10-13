@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { session } from '../../session'
-import { BookIcon, ControlsHint, GamepadIcon, Hint } from '../bits'
+import { BookIcon, ConnStatus, ControlsHint, GamepadIcon, Hint } from '../bits'
 import { sound } from '../../audio/sound'
 import { QrCode } from '../../share/qr'
 import { Avatar } from '../Avatar'
@@ -228,7 +228,8 @@ export function ShareScreen() {
   useMenuNav(ref, { onBack: () => session.toMenu() })
   if (!r) return null
   const o = r.outcome
-  const data: StoryData = { name: o?.entry.name ?? '', score: r.score, books: r.books, distance: r.distance, posScore: o?.posScore ?? null, posBooks: o?.posBooks ?? null }
+  const ranked = !!o && (o.status ?? 'ok') !== 'recusada' && o.status !== 'analise'
+  const data: StoryData = { name: o?.entry.name ?? '', score: r.score, books: r.books, distance: r.distance, posScore: ranked ? o.posScore : null, posBooks: ranked ? o.posBooks : null, pose: r.pose }
   const base = shareBase()
   const url = storyUrl(data, base)
   const pub = isPublicBase(base)
@@ -236,11 +237,13 @@ export function ShareScreen() {
     <div className="lr-screen lr-center" ref={ref}>
       <div className="lr-card lr-share-card">
         <div className="lr-share-info">
-          <p className="lr-eyebrow">{o ? 'Você está no ranking' : 'Sua arte está pronta'}</p>
-          {o && (
+          <p className="lr-eyebrow">{!o ? 'Sua arte está pronta' : o.status === 'recusada' ? 'Partida não validada' : o.status === 'analise' ? 'Partida enviada para a equipe' : 'Você está no ranking'}</p>
+          {o?.status === 'recusada' && <p className="lr-warn">O servidor não conseguiu validar esta partida, então ela não entrou no ranking. Jogue de novo para tentar.</p>}
+          {o?.status === 'analise' && <p className="lr-note-text">Este aparelho estava sem internet quando o jogo abriu. A equipe confere a partida e libera no ranking.</p>}
+          {o && ranked && (
             <>
               <h2 className="lr-h2 lr-with-avatar">
-                <Avatar id={o.entry.id} name={o.entry.name} size={52} />
+                <Avatar id={o.entry.id} name={o.entry.name} photo={o.entry.photo} size={52} />
                 {o.entry.name}, sua posição:
               </h2>
               <div className="lr-places">
@@ -255,6 +258,7 @@ export function ShareScreen() {
               </div>
               {o.previousBest != null && !o.improvedScore && <p className="lr-note-text">Vale o seu melhor: {fmt(o.entry.score)} pontos e {plural(o.entry.bestBooks, 'livro', 'livros')}.</p>}
               {o.previousBest != null && o.improvedScore && <p className="lr-badge">Novo recorde pessoal!</p>}
+              {o.status === 'pendente' && <p className="lr-note-text">Sem internet agora: a partida fica guardada e entra no ranking online assim que a conexão voltar. A posição pode mudar.</p>}
             </>
           )}
           <div className="lr-qr-box">
@@ -294,7 +298,7 @@ function RankList({ title, items, value, mine }: { title: string; items: PublicE
             <li key={e.id} className={`${i === 0 ? 'is-first' : ''}${e.id === mine ? ' is-me' : ''}`}>
               <span className="lr-pos">{i + 1}º</span>
               <span className="lr-name">
-                <Avatar id={e.id} name={e.name} size={30} />
+                <Avatar id={e.id} name={e.name} photo={e.photo} size={30} />
                 {e.name}
               </span>
               <span className="lr-pts">{value(e)}</span>
@@ -322,6 +326,7 @@ export function RankingScreen() {
             <p className="lr-eyebrow">South Tech Summit</p>
             <h2 className="lr-h2">Rankings</h2>
           </div>
+          <ConnStatus />
         </div>
         <div className="lr-rank-cols">
           <RankList title="Mais pontos" items={byScore} mine={mine} value={(e) => fmt(e.score)} />

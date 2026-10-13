@@ -7,3 +7,4 @@ bun.lock
 src/routeTree.gen.ts
 jogos
 public/lumis-run
+supabase

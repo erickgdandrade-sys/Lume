@@ -7,7 +7,8 @@ import { input } from './input/inputManager'
 import { cleanName } from './ranking/names'
 import { phoneDigits } from './ranking/phone'
 import { photos } from './ranking/photos'
-import { ranking } from './ranking/ranking'
+import { ranking } from './ranking/store'
+import { randomPose } from './share/poses'
 import { useUi, type Screen } from './ui/uiStore'
 
 /**
@@ -43,6 +44,7 @@ class GameSession {
   private queue: Command[] = []
   /** registro dos comandos (passo, comando): base da validação por reexecução na Fase 6 */
   log: [number, Command][] = []
+  private ticket: { token: string; seed: number } | null = null
   private hudTimer = 0
   private phaseTime = 0
   private runToken = 0
@@ -85,7 +87,9 @@ class GameSession {
     if (this.phase === 'countdown' || this.phase === 'running') return
     const record = ranking.byScore()[0]?.score ?? null
     this.offset = this.viewDistance
-    this.sim = createSim(newSeed())
+    // partida oficial usa a semente de um bilhete do servidor (ranking online)
+    this.ticket = demo ? null : ranking.takeTicket()
+    this.sim = createSim(this.ticket?.seed ?? newSeed())
     this.queue = []
     this.log = []
     this.stepper.reset()
@@ -242,9 +246,9 @@ class GameSession {
     const { player, demo } = useUi.getState()
     this.phase = 'over'
     this.phaseTime = 0
-    const run = { score: scoreOf(s), distance: s.distance, books: s.books, durationMs: Math.round(s.time * 1000), seed: s.seed }
+    const run = { score: scoreOf(s), distance: s.distance, books: s.books, durationMs: Math.round(s.time * 1000), seed: s.seed, commands: this.log.slice(), token: this.ticket?.token ?? null }
     const preview = demo ? null : ranking.preview(run, player?.name, player?.phone)
-    useUi.getState().set({ result: { score: run.score, books: s.books, distance: Math.floor(s.distance), time: s.time, demo, run, preview, outcome: null, skipped: false } })
+    useUi.getState().set({ result: { score: run.score, books: s.books, distance: Math.floor(s.distance), time: s.time, demo, run, preview, outcome: null, skipped: false, pose: randomPose() } })
     sound.play('fim')
     const token = this.runToken
     setTimeout(() => {
@@ -253,15 +257,24 @@ class GameSession {
     this.go('fim')
   }
 
-  /** cadastro no fim da partida: grava nos dois rankings e abre a tela do QR */
-  register(name: string, phone: string, photo: string | null = null) {
+  /** cadastro no fim da partida: envia ao ranking (validado no servidor) e abre a tela do QR */
+  async register(name: string, phone: string, photo: string | null = null) {
     const st = useUi.getState()
     const r = st.result
-    if (!r || r.demo || r.outcome || this.phase !== 'over') return
-    const outcome = ranking.submit({ ...r.run, name: cleanName(name), phone })
-    if (photo) void photos.set(outcome.entry.id, photo)
-    sound.play('save')
-    st.set({ result: { ...r, outcome }, player: { name: outcome.entry.name, phone: phoneDigits(phone) }, record: ranking.byScore()[0]?.score ?? null })
+    if (!r || r.demo || r.outcome || this.phase !== 'over' || st.saving) return
+    st.set({ saving: true })
+    const token = this.runToken
+    let outcome
+    try {
+      outcome = await ranking.submit({ ...r.run, name: cleanName(name), phone, photo })
+    } finally {
+      useUi.getState().set({ saving: false })
+    }
+    // a pessoa saiu da tela enquanto salvava
+    if (this.runToken !== token || this.phase !== 'over') return
+    if (photo && outcome.status !== 'recusada') void photos.set(outcome.entry.id, photo)
+    sound.play(outcome.status === 'recusada' ? 'error' : 'save')
+    useUi.getState().set({ result: { ...r, outcome }, player: { name: outcome.entry.name, phone: phoneDigits(phone) }, record: ranking.byScore()[0]?.score ?? null })
     this.phaseTime = 0
     this.go('compartilhar')
   }

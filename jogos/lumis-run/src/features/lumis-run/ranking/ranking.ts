@@ -10,8 +10,8 @@ import { phoneDigits } from './phone'
  * O WhatsApp fica só no registro privado. O que vai para a tela passa por
  * publicEntry(), que não leva o telefone.
  *
- * Esta implementação guarda no navegador da máquina do stand (localStorage).
- * A Fase 6 troca por Supabase com validação no servidor, mesma interface.
+ * LocalRankingStore guarda no navegador da máquina (modo sem servidor). Com o
+ * ranking online configurado, store.ts usa o servidor (validação por reexecução).
  */
 export interface RunResult {
   name: string
@@ -52,6 +52,12 @@ export interface PublicEntry {
   distance: number
   books: number
   bestBooks: number
+  /** ranking online: duração da melhor partida em pontos e na de mais livros (desempates) */
+  durationMs?: number
+  booksMs?: number
+  rawDistance?: number
+  /** ranking online: endereço público da foto, se a pessoa autorizou */
+  photo?: string
 }
 
 export interface SubmitOutcome {
@@ -62,6 +68,8 @@ export interface SubmitOutcome {
   improvedBooks: boolean
   previousBest: number | null
   previousBooks: number | null
+  /** ranking online: ok = no ranking; analise = aguardando a equipe; pendente = sem internet, será enviado; recusada = não validou */
+  status?: 'ok' | 'analise' | 'pendente' | 'recusada'
 }
 
 export interface RankingStore {
@@ -105,7 +113,7 @@ function publicId(key: string) {
 }
 
 export function publicEntry(p: PlayerRecord): PublicEntry {
-  return { id: publicId(p.key), name: p.name, score: p.best.score, distance: Math.floor(p.best.distance), books: p.best.books, bestBooks: p.bestBooks.books }
+  return { id: publicId(p.key), name: p.name, score: p.best.score, distance: Math.floor(p.best.distance), books: p.best.books, bestBooks: p.bestBooks.books, durationMs: p.best.durationMs, booksMs: p.bestBooks.durationMs, rawDistance: p.best.distance }
 }
 
 const sortScore = (list: PlayerRecord[]) => list.slice().sort((a, b) => compareScore(a.best, b.best))
@@ -263,5 +271,3 @@ export class LocalRankingStore implements RankingStore {
     }
   }
 }
-
-export const ranking: RankingStore = new LocalRankingStore()
