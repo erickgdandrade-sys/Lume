@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ranking } from '../../ranking/ranking'
+import { ranking } from '../../ranking/store'
 import { cleanName, NAME_ERROR_TEXT, NAME_LIMITS, validateName } from '../../ranking/names'
 import { formatPhone, PHONE_ERROR_TEXT, validatePhone } from '../../ranking/phone'
 import { sound } from '../../audio/sound'
@@ -81,6 +81,7 @@ function ConfirmDuplicate({ name, score, books, onYes, onNo }: { name: string; s
 export function NameScreen() {
   const device = useUi((s) => s.device)
   const result = useUi((s) => s.result)
+  const saving = useUi((s) => s.saving)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('') // só dígitos
   const [field, setField] = useState<Field>('nome')
@@ -117,11 +118,12 @@ export function NameScreen() {
   const register = (photo: string | null) => {
     if (sent.current || !photoFor) return
     sent.current = true
-    session.register(photoFor, phone, photo)
+    void session.register(photoFor, phone, photo)
   }
 
-  const submit = () => {
-    if (!checkName()) return
+  const [checking, setChecking] = useState(false)
+  const submit = async () => {
+    if (checking || !checkName()) return
     const perr = validatePhone(phone)
     if (perr) {
       sound.play('error')
@@ -131,7 +133,9 @@ export function NameScreen() {
     }
     const n = cleanName(name)
     // aviso só quando nome E WhatsApp já estão no ranking (é a mesma pessoa jogando de novo)
-    const existing = ranking.findPlayer(n, phone)
+    setChecking(true)
+    const existing = await ranking.findPlayer(n, phone)
+    setChecking(false)
     if (existing) return setDup({ name: existing.name, score: existing.score, books: existing.bestBooks })
     save(n)
   }
@@ -139,7 +143,7 @@ export function NameScreen() {
   const next = () => {
     if (field === 'nome') {
       if (checkName()) setField('whats')
-    } else submit()
+    } else void submit()
   }
 
   const back = () => (field === 'whats' ? setField('nome') : session.go('fim'))
@@ -159,6 +163,17 @@ export function NameScreen() {
 
   const phoneShown = formatPhone(phone) || phone
   if (!result) return null
+  if (saving) {
+    return (
+      <div className="lr-screen lr-left">
+        <div className="lr-card lr-saving" role="status">
+          <span className="lr-spinner" aria-hidden="true" />
+          <h2 className="lr-h2">Salvando sua partida…</h2>
+          <p className="lr-note-text">{ranking.online ? 'O servidor está conferindo a partida e calculando sua posição.' : 'Gravando no ranking.'}</p>
+        </div>
+      </div>
+    )
+  }
   if (photoFor) {
     return (
       <div className="lr-screen lr-left">
@@ -240,7 +255,7 @@ export function NameScreen() {
         ) : pad ? null : (
           <div className="lr-actions">
             <button type="submit" className="lr-cta">
-              <Hint pad="A" kb="Enter" /> {field === 'nome' ? 'Próximo' : 'Salvar no ranking'}
+              <Hint pad="A" kb="Enter" /> {field === 'nome' ? 'Próximo' : checking ? 'Conferindo…' : 'Salvar no ranking'}
             </button>
             <button type="button" className="lr-btn" onClick={() => session.go('fim')}>
               <Hint pad="B" kb="Esc" /> Voltar

@@ -1,33 +1,30 @@
 import * as THREE from 'three'
 import { LUMIS } from '../config/gameConfig'
 
+/** proporções da estrela ajustadas ao contorno das imagens oficiais da Lumis */
+export const STAR_SHAPE = { innerRatio: 0.68, tipPower: 1.2 } as const
+
 /**
  * Lumis conforme o modelo oficial: estrela "almofadada", grossa no centro,
  * com pontas curtas e arredondadas que afinam nas extremidades.
  * A malha é gerada em anéis concêntricos sobre o contorno da estrela; a
  * espessura em cada ponto segue um perfil de domo, o que dá o volume macio.
  */
-export function createStarOutline(R: number = LUMIS.radius, innerRatio = 0.58, samplesPerCorner = 14) {
-  const pts: THREE.Vector2[] = []
-  for (let i = 0; i < 10; i++) {
-    const a = Math.PI / 2 + (i * Math.PI) / 5
-    const r = i % 2 === 0 ? R : R * innerRatio
-    pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r))
-  }
+export function createStarOutline(R: number = LUMIS.radius, innerRatio = STAR_SHAPE.innerRatio, samplesPerCorner = 14) {
+  // contorno medido nas imagens oficiais: r(φ) = Rin + (R − Rin)·t^q, com
+  // t = (1 + cos 5(φ − 90°)) / 2. Pontas curtas, gordinhas e arredondadas e
+  // cantos internos macios, sem trechos retos.
   const shape = new THREE.Shape()
-  const n = pts.length
-  for (let i = 0; i < n; i++) {
-    const prev = pts[(i - 1 + n) % n]
-    const cur = pts[i]
-    const next = pts[(i + 1) % n]
-    const round = i % 2 === 0 ? R * 0.3 : R * 0.2
-    const a = cur.clone().add(prev.clone().sub(cur).normalize().multiplyScalar(round))
-    const b = cur.clone().add(next.clone().sub(cur).normalize().multiplyScalar(round))
-    if (i === 0) shape.moveTo(a.x, a.y)
-    else shape.lineTo(a.x, a.y)
-    shape.quadraticCurveTo(cur.x, cur.y, b.x, b.y)
+  const N = 720
+  for (let k = 0; k <= N; k++) {
+    const phi = Math.PI / 2 + (k / N) * Math.PI * 2
+    const t = (1 + Math.cos(5 * (phi - Math.PI / 2))) / 2
+    const r = R * innerRatio + R * (1 - innerRatio) * Math.pow(t, STAR_SHAPE.tipPower)
+    const x = Math.cos(phi) * r
+    const y = Math.sin(phi) * r
+    if (k === 0) shape.moveTo(x, y)
+    else shape.lineTo(x, y)
   }
-  shape.closePath()
   // pontos espaçados por comprimento, para a malha ficar regular
   return shape.getSpacedPoints(samplesPerCorner * 10).slice(0, -1)
 }
@@ -111,7 +108,7 @@ export function createStarGeometry(R: number = LUMIS.radius, thickness: number =
 export function surfaceZ(x: number, y: number, R: number = LUMIS.radius, thickness: number = LUMIS.thickness) {
   // aproximação: usa o raio interno da estrela como borda nessa direção
   const r = Math.hypot(x, y)
-  const edge = R * 0.62
+  const edge = R * STAR_SHAPE.innerRatio
   return puffZ(Math.min(1, r / edge), r, R, thickness)
 }
 

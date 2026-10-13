@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { InputDevice } from '../input/actions'
+import type { Command } from '../core/sim'
 import type { SubmitOutcome } from '../ranking/ranking'
 
 /**
@@ -22,13 +23,15 @@ export interface Result {
   time: number
   demo: boolean
   /** dados exatos da partida, gravados só quando a pessoa se cadastra no fim */
-  run: { score: number; distance: number; books: number; durationMs: number; seed: number }
+  run: { score: number; distance: number; books: number; durationMs: number; seed: number; commands: [number, Command][]; token: string | null }
   /** posições que a partida teria (antes do cadastro) */
   preview: { posScore: number; posBooks: number } | null
   /** depois do cadastro */
   outcome: SubmitOutcome | null
   /** cadastro pulado: arte sem posição */
   skipped: boolean
+  /** imagem oficial da Lumis sorteada para a arte desta partida */
+  pose: number
 }
 
 interface UiState {
@@ -42,6 +45,8 @@ interface UiState {
   hud: Hud
   countdown: number
   result: Result | null
+  /** enviando a partida ao ranking */
+  saving: boolean
   pauseReason: 'jogador' | 'controle' | 'aba' | null
   device: InputDevice
   pad: { connected: boolean; label: string }
@@ -57,6 +62,7 @@ export const useUi = create<UiState>((set) => ({
   player: null,
   demo: false,
   record: null,
+  saving: false,
   hud: { score: 0, books: 0, time: 0, level: 1 },
   countdown: 0,
   result: null,

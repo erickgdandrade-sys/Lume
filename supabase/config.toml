@@ -1,0 +1,6 @@
+# Configuração mínima para o Supabase CLI (o deploy é feito pelo workflow
+# .github/workflows/supabase.yml). O projeto é escolhido em jogos/lumis-run/online.json.
+project_id = "lume"
+
+[functions.lumis-run]
+verify_jwt = false

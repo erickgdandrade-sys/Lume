@@ -21,11 +21,12 @@ const float ARM_PIVOT = ${(R * 0.4).toFixed(4)};
 float lumisArmW(vec3 p) { return smoothstep(${(R * 0.36).toFixed(4)}, ${(R * 0.86).toFixed(4)}, dot(p.xy, ARM_DIR)); }
 `
 
-const EYE_X = 0.115
-const EYE_Y = 0.04
-const MOUTH_Y = -0.075
-const CHEEK_X = 0.215
-const CHEEK_Y = -0.045
+// rosto medido nas imagens oficiais (proporções em relação ao raio da estrela)
+const EYE_X = 0.15
+const EYE_Y = 0.064
+const MOUTH_Y = -0.008
+const CHEEK_X = 0.255
+const CHEEK_Y = -0.018
 
 /** posição e inclinação de um elemento assentado na superfície frontal */
 function onFace(x: number, y: number, lift = 0.004) {
@@ -42,8 +43,8 @@ function onFace(x: number, y: number, lift = 0.004) {
 function mouthShapes() {
   // boca aberta em "D": topo reto levemente curvo e base arredondada
   const open = new THREE.Shape()
-  const w = 0.066
-  const h = 0.06
+  const w = 0.092
+  const h = 0.09
   open.moveTo(-w, 0)
   open.quadraticCurveTo(0, -0.008, w, 0)
   open.bezierCurveTo(w, -h * 0.9, w * 0.45, -h * 1.15, 0, -h * 1.15)
@@ -71,8 +72,8 @@ export function Lumis({ driver, shadowless = false }: { driver: LumisDriver; sha
     const bodyMat = new THREE.MeshStandardMaterial({
       color: LUMIS_COLORS.body,
       emissive: LUMIS_COLORS.bodyEmissive,
-      emissiveIntensity: 0.16,
-      roughness: 0.62,
+      emissiveIntensity: 0.18,
+      roughness: 0.55,
       metalness: 0,
     })
     const waveUniform = { value: 0 }
@@ -96,15 +97,15 @@ export function Lumis({ driver, shadowless = false }: { driver: LumisDriver; sha
     const whiteMat = new THREE.MeshBasicMaterial({ color: LUMIS_COLORS.highlight })
     const mouthMat = new THREE.MeshBasicMaterial({ color: LUMIS_COLORS.mouth })
     const tongueMat = new THREE.MeshBasicMaterial({ color: LUMIS_COLORS.tongue })
-    const cheekMat = new THREE.MeshBasicMaterial({ color: LUMIS_COLORS.cheek, transparent: true, opacity: 0.6, depthWrite: false })
+    const cheekMat = new THREE.MeshBasicMaterial({ color: LUMIS_COLORS.cheek, transparent: true, opacity: 0.72, depthWrite: false })
     const sphere = new THREE.SphereGeometry(1, 20, 14)
-    const happyEye = new THREE.TorusGeometry(0.034, 0.011, 8, 18, Math.PI)
+    const happyEye = new THREE.TorusGeometry(0.046, 0.013, 8, 18, Math.PI)
     const smile = new THREE.TorusGeometry(0.045, 0.011, 8, 20, Math.PI)
     smile.rotateZ(Math.PI)
     const oMouth = new THREE.CircleGeometry(0.03, 20)
     oMouth.scale(1, 1.25, 1)
-    const cheek = new THREE.CircleGeometry(0.045, 24)
-    cheek.scale(1.25, 0.8, 1)
+    const cheek = new THREE.CircleGeometry(0.046, 24)
+    cheek.scale(1.2, 0.72, 1)
     const { open, tongue } = mouthShapes()
     const shadowTex = radialTexture('rgba(15,23,42,0.42)', 'rgba(15,23,42,0)')
     return { waveUniform, geo, bodyMat, eyeMat, whiteMat, mouthMat, tongueMat, cheekMat, sphere, happyEye, smile, oMouth, cheek, open, tongue, shadowTex }
@@ -114,7 +115,7 @@ export function Lumis({ driver, shadowless = false }: { driver: LumisDriver; sha
     () => ({
       eyes: [-1, 1].map((s) => onFace(s * EYE_X, EYE_Y, 0.006)),
       mouth: onFace(0, MOUTH_Y, 0.004),
-      cheeks: [-1, 1].map((s) => onFace(s * CHEEK_X, CHEEK_Y, 0.014)),
+      cheeks: [-1, 1].map((s) => onFace(s * CHEEK_X, CHEEK_Y, 0.032)),
     }),
     [],
   )
@@ -161,8 +162,8 @@ export function Lumis({ driver, shadowless = false }: { driver: LumisDriver; sha
         {face.eyes.map((f, i) => (
           <group key={i} position={f.position} rotation={f.rotation}>
             <group ref={(g) => { if (g) eyesOpen.current[i] = g }}>
-              <mesh geometry={res.sphere} material={res.eyeMat} scale={[0.04, 0.056, 0.016]} />
-              <mesh geometry={res.sphere} material={res.whiteMat} position={[0.01, 0.018, 0.013]} scale={0.011} />
+              <mesh geometry={res.sphere} material={res.eyeMat} scale={[0.052, 0.074, 0.022]} />
+              <mesh geometry={res.sphere} material={res.whiteMat} position={[0.015, 0.027, 0.019]} scale={[0.015, 0.018, 0.006]} />
             </group>
             <mesh ref={(m) => { if (m) eyesHappy.current[i] = m }} geometry={res.happyEye} material={res.eyeMat} position={[0, -0.01, 0]} visible={false} />
           </group>

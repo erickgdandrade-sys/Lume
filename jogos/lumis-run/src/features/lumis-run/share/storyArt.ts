@@ -1,5 +1,5 @@
 import LOGO_BRANCO from '../../../assets/lume-logo-branco.png'
-import LUMIS_FELIZ from '../../../assets/lumis-feliz.png'
+import { POSES, poseFor } from './poses'
 import type { StoryData } from './storyData'
 
 /** Arte vertical 1080×1920 para os stories, desenhada em canvas. */
@@ -99,7 +99,8 @@ export async function drawStory(canvas: HTMLCanvasElement, d: StoryData) {
   } catch {
     // sem a fonte, usa a do sistema
   }
-  const [logo, lumis] = await Promise.all([loadImg(LOGO_BRANCO), loadImg(LUMIS_FELIZ)])
+  const pose = d.pose != null && d.pose < POSES.length ? d.pose : poseFor(`${d.name}|${d.score}|${d.books}`)
+  const [logo, lumis] = await Promise.all([loadImg(LOGO_BRANCO), loadImg(POSES[pose])])
   const W = STORY_W
   const cx = W / 2
 
@@ -136,14 +137,17 @@ export async function drawStory(canvas: HTMLCanvasElement, d: StoryData) {
   g.drawImage(logo, cx - lw / 2, 150, lw, (logo.height / logo.width) * lw)
   pill(g, cx, 300, 'LUMIS RUN 3D', 'rgba(255,255,255,0.18)', '#fff', 34, 40)
 
-  // Lumis
-  const lh = 620
-  const lwid = (lumis.width / lumis.height) * lh
+  // Lumis: uma das imagens oficiais, encaixada numa área de 820 x 620
+  // as poses da folha são menores: aumenta no máximo 1,8× para não borrar
+  const fit = Math.min(820 / lumis.width, 620 / lumis.height, lumis.width < 500 ? 1.8 : 9)
+  const lwid = lumis.width * fit
+  const lh = lumis.height * fit
   g.save()
-  g.shadowColor = 'rgba(15,23,42,0.35)'
-  g.shadowBlur = 50
-  g.shadowOffsetY = 24
-  g.drawImage(lumis, cx - lwid / 2, 420, lwid, lh)
+  g.imageSmoothingQuality = 'high'
+  g.shadowColor = 'rgba(15,23,42,0.3)'
+  g.shadowBlur = 44
+  g.shadowOffsetY = 20
+  g.drawImage(lumis, cx - lwid / 2, 420 + (620 - lh), lwid, lh)
   g.restore()
 
   // nome

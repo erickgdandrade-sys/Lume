@@ -1,6 +1,8 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { photos } from '../../ranking/photos'
-import { compareBooks, playerPublicId, ranking, toCsv } from '../../ranking/ranking'
+import { compareBooks, playerPublicId, toCsv, type PlayerRecord } from '../../ranking/ranking'
+import { ApiError, isLocal, isOnline, ranking } from '../../ranking/store'
+import type { StaffRun, StaffView } from '../../../../../server/handler'
 import { Avatar } from '../Avatar'
 import { formatPhone, whatsappLink } from '../../ranking/phone'
 import { isPublicBase, setShareBase, shareBase } from '../../share/storyData'
@@ -9,8 +11,9 @@ import { fmt, useInputAction } from '../useInput'
 
 /**
  * Área da equipe: contatos de quem está no ranking, para entregar os prêmios.
- * O PIN só evita que um visitante abra a lista por acidente na máquina do stand;
- * os dados ficam neste navegador (na Fase 6, numa tabela privada do Supabase).
+ * Ranking online: os contatos ficam no servidor e só saem com a senha da equipe
+ * (segredo guardado no Supabase, nunca no código do site).
+ * Modo local: o PIN só evita que um visitante abra a lista por acidente.
  */
 const PIN_KEY = 'lumis-run:pin-equipe'
 const DEFAULT_PIN = '2026'
@@ -23,20 +26,58 @@ function getPin() {
   }
 }
 
+type Staff = { players: (PlayerRecord & { photo?: string })[]; review: StaffRun[] }
+
 export function StaffScreen() {
-  const [ok, setOk] = useState(false)
+  const [senha, setSenha] = useState<string | null>(null)
+  const [view, setView] = useState<Staff | null>(null)
   useInputAction((a) => {
     if (a === 'back') session.go('ranking')
   })
-  return ok ? <StaffPanel /> : <PinGate onOk={() => setOk(true)} />
+  if (isOnline(ranking)) {
+    const api = ranking
+    return view && senha != null ? (
+      <StaffPanel view={view} senha={senha} setView={setView} />
+    ) : (
+      <PinGate
+        online
+        check={async (s) => {
+          const v = await api.staff<StaffView>(s)
+          setSenha(s)
+          setView(v)
+        }}
+      />
+    )
+  }
+  return senha != null ? <LocalPanel /> : <PinGate check={async (p) => (p === getPin() ? setSenha('') : Promise.reject(new ApiError(401, 'senha')))} />
 }
 
-function PinGate({ onOk }: { onOk: () => void }) {
+function LocalPanel() {
+  // redesenha quando o ranking muda
+  useSyncExternalStore((cb) => ranking.subscribe(cb), () => ranking.byScore(), () => ranking.byScore())
+  const local = isLocal(ranking) ? ranking.local : null
+  return <StaffPanel view={{ players: local?.privateList() ?? [], review: [] }} senha={null} setView={() => {}} />
+}
+
+function PinGate({ check, online = false }: { check: (v: string) => Promise<void>; online?: boolean }) {
   const [pin, setPin] = useState('')
-  const [err, setErr] = useState(false)
-  const check = () => (pin === getPin() ? onOk() : (setErr(true), setPin('')))
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const run = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await check(pin)
+    } catch (e) {
+      setErr(e instanceof ApiError && e.status === 401 ? (online ? 'Senha incorreta.' : 'PIN incorreto.') : 'Sem conexão com o servidor. Tente de novo.')
+      setPin('')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const checkNow = () => void run()
   useInputAction((a) => {
-    if (a === 'confirm') check()
+    if (a === 'confirm') checkNow()
   })
   return (
     <div className="lr-screen lr-center">
@@ -44,19 +85,19 @@ function PinGate({ onOk }: { onOk: () => void }) {
         className="lr-card lr-pin-card"
         onSubmit={(e) => {
           e.preventDefault()
-          check()
+          checkNow()
         }}
       >
         <p className="lr-eyebrow">Área da equipe</p>
-        <h2 className="lr-h2">Digite o PIN</h2>
+        <h2 className="lr-h2">{online ? 'Digite a senha da equipe' : 'Digite o PIN'}</h2>
         <label className="lr-field">
-          <span className="lr-sr">PIN</span>
-          <input id="lr-pin" type="password" inputMode="numeric" autoFocus value={pin} onChange={(e) => (setErr(false), setPin(e.target.value))} />
+          <span className="lr-sr">{online ? 'Senha' : 'PIN'}</span>
+          <input id="lr-pin" type="password" inputMode={online ? 'text' : 'numeric'} autoFocus value={pin} onChange={(e) => (setErr(null), setPin(e.target.value))} />
         </label>
-        {err && <p className="lr-error" role="alert">PIN incorreto.</p>}
+        {err && <p className="lr-error" role="alert">{err}</p>}
         <div className="lr-actions">
-          <button type="submit" className="lr-cta">
-            Entrar
+          <button type="submit" className="lr-cta" disabled={busy}>
+            {busy ? 'Conferindo…' : 'Entrar'}
           </button>
           <button type="button" className="lr-btn" onClick={() => session.go('ranking')}>
             Voltar
@@ -78,10 +119,25 @@ function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function StaffPanel() {
-  // redesenha quando o ranking muda
-  useSyncExternalStore((cb) => ranking.subscribe(cb), () => ranking.byScore(), () => ranking.byScore())
-  const list = ranking.privateList()
+function StaffPanel({ view, senha, setView }: { view: Staff; senha: string | null; setView: (v: Staff) => void }) {
+  const list = view.players
+  const online = senha != null
+  const act = async (acao: string, extra: object = {}) => {
+    if (!isOnline(ranking) || senha == null) return
+    try {
+      setView(await ranking.staff<StaffView>(senha, acao, extra))
+      if (acao !== 'listar') void ranking.refresh()
+    } catch {
+      flash('Sem conexão com o servidor. Tente de novo.')
+    }
+  }
+  // lista atualizada a cada 20 s enquanto a área está aberta
+  useEffect(() => {
+    if (!online) return
+    const t = setInterval(() => void act('listar'), 20000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online])
   const booksOrder = list.slice().sort((a, b) => compareBooks(a.bestBooks, b.bestBooks)).map((p) => p.key)
   const [base, setBase] = useState(() => shareBase())
   const [newPin, setNewPin] = useState('')
@@ -107,8 +163,31 @@ function StaffPanel() {
           </button>
         </div>
         <p className="lr-note-text">
-          {list.length} {list.length === 1 ? 'jogador' : 'jogadores'}. Os telefones só aparecem aqui. Use só para combinar a entrega dos prêmios.
+          {list.length} {list.length === 1 ? 'jogador' : 'jogadores'}{online ? ' no ranking online' : ''}. Os telefones só aparecem aqui. Use só para combinar a entrega dos prêmios.
         </p>
+        {view.review.length > 0 && (
+          <div className="lr-review">
+            <h3 className="lr-staff-h3">Partidas em análise ({view.review.length})</h3>
+            <p className="lr-note-text">Jogadas num aparelho que estava sem internet desde que abriu o jogo. A partida foi reexecutada e confere; aprove se ela foi jogada no stand.</p>
+            <ul className="lr-review-list">
+              {view.review.map((r) => (
+                <li key={r.id}>
+                  <span>
+                    <strong>{r.name}</strong> · {fmt(r.score)} pontos · {r.books} livros · {new Date(r.at).toLocaleString('pt-BR')}
+                  </span>
+                  <span className="lr-review-actions">
+                    <button className="lr-btn" onClick={() => void act('aprovar', { runId: r.id })}>
+                      Aprovar
+                    </button>
+                    <button className="lr-btn lr-danger" onClick={() => void act('recusar', { runId: r.id })}>
+                      Recusar
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="lr-staff-table-wrap">
           <table className="lr-staff-table">
             <thead>
@@ -131,7 +210,7 @@ function StaffPanel() {
                     <td>{i + 1}º</td>
                     <td>{bpos}º</td>
                     <td>
-                      <Avatar id={playerPublicId(p.name, p.phone)} name={p.name} size={40} />
+                      <Avatar id={playerPublicId(p.name, p.phone)} name={p.name} photo={p.photo} size={40} />
                     </td>
                     <td>{p.name}</td>
                     <td>
@@ -184,8 +263,11 @@ function StaffPanel() {
         </div>
         {!isPublicBase(base) && <p className="lr-warn lr-small">Este endereço não abre no celular do visitante.</p>}
 
-        <h3 className="lr-staff-h3">Segurança</h3>
+        <h3 className="lr-staff-h3">{online ? 'Depois do evento' : 'Segurança'}</h3>
+        {online && <p className="lr-note-text">Apaga do servidor o ranking, os WhatsApps e as fotos de todos os jogadores. Não tem como desfazer.</p>}
         <div className="lr-inline-form">
+          {!online && (
+          <>
           <input className="lr-input" type="password" inputMode="numeric" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="Novo PIN (4 a 8 dígitos)" />
           <button
             className="lr-btn"
@@ -202,12 +284,15 @@ function StaffPanel() {
           >
             Trocar PIN
           </button>
+          </>
+          )}
           <button
             className="lr-btn lr-danger"
             disabled={!list.length}
             onClick={() => {
               if (confirmClear === 0) return setConfirmClear(1)
-              ranking.clear()
+              if (online) void act('limpar')
+              else if (isLocal(ranking)) ranking.local.clear()
               void photos.clear()
               setConfirmClear(0)
               flash('Ranking, contatos e fotos apagados.')

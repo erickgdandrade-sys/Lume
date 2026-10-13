@@ -24,7 +24,7 @@ export function App() {
     document.getElementById('root')!.style.background = 'transparent'
     return (
       <Suspense fallback={null}>
-        <LumisPhoto expression={photo as 'alegria'} wave={Number(new URLSearchParams(location.search).get('tchau')) || 0} />
+        <LumisPhoto expression={photo as 'alegria'} wave={Number(new URLSearchParams(location.search).get('tchau')) || 0} front={new URLSearchParams(location.search).has('frente')} />
       </Suspense>
     )
   }

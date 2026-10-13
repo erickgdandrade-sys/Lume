@@ -1,3 +1,4 @@
+import { ranking } from '../../ranking/store'
 import { useEffect, useRef, useState } from 'react'
 import { sound } from '../../audio/sound'
 import { input } from '../../input/inputManager'
@@ -107,7 +108,7 @@ export function PhotoStep({ name, onDone, onBack }: { name: string; onDone: (pho
         <>
           <h2 className="lr-h2">{name}, quer aparecer com foto?</h2>
           <p className="lr-note-text">
-            A foto aparece ao lado do seu nome no ranking, na tela do stand, e ajuda a equipe da Lume a encontrar você para entregar o prêmio. Ela fica só neste computador e é apagada depois do evento. É opcional.
+            {ranking.online ? 'A foto aparece ao lado do seu nome no ranking do jogo, que qualquer pessoa pode ver no site da Lume, e ajuda a equipe a encontrar você para entregar o prêmio. Ela é apagada depois do evento. É opcional.' : 'A foto aparece ao lado do seu nome no ranking, na tela do stand, e ajuda a equipe da Lume a encontrar você para entregar o prêmio. Ela fica só neste computador e é apagada depois do evento. É opcional.'}
           </p>
           <div className="lr-actions">
             <button className="lr-cta" data-nav onClick={openCamera}>

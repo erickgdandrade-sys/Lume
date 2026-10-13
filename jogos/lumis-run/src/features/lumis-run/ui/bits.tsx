@@ -1,4 +1,5 @@
 import { useUi } from './uiStore'
+import { useConnection } from './useInput'
 
 /** botão do controle Xbox com a cor oficial de cada letra */
 export function PadKey({ k }: { k: 'A' | 'B' | 'X' | 'Y' | 'Menu' | 'View' }) {
@@ -64,5 +65,18 @@ export function ControlsHint() {
         </li>
       ))}
     </ul>
+  )
+}
+
+/** estado do ranking online: ao vivo ou sem internet (mostra o último ranking recebido) */
+export function ConnStatus() {
+  const { conn, pending, online } = useConnection()
+  if (!online) return null
+  return (
+    <p className={`lr-conn is-${conn}`} role="status">
+      <span className="lr-conn-dot" aria-hidden="true" />
+      {conn === 'online' ? 'Ranking online, igual em todos os aparelhos' : 'Sem internet: mostrando o último ranking recebido'}
+      {pending > 0 && ` · ${pending} ${pending === 1 ? 'partida esperando' : 'partidas esperando'} envio`}
+    </p>
   )
 }

@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { sound } from '../../audio/sound'
 import { session } from '../../session'
 import { Avatar } from '../Avatar'
-import { BookIcon, Hint } from '../bits'
+import { BookIcon, ConnStatus, Hint } from '../bits'
 import { fmt, useMenuNav, useRanking, useSound } from '../useInput'
 
 export function MenuScreen() {
@@ -29,10 +29,11 @@ export function MenuScreen() {
         </div>
         {byScore.length > 0 && (
           <div className="lr-mini-ranks">
-            <MiniList title="Mais pontos" items={byScore.map((e) => ({ id: e.id, name: e.name, value: fmt(e.score) }))} />
-            <MiniList title="Mais livros" icon items={byBooks.map((e) => ({ id: e.id, name: e.name, value: fmt(e.bestBooks) }))} />
+            <MiniList title="Mais pontos" items={byScore.map((e) => ({ id: e.id, name: e.name, photo: e.photo, value: fmt(e.score) }))} />
+            <MiniList title="Mais livros" icon items={byBooks.map((e) => ({ id: e.id, name: e.name, photo: e.photo, value: fmt(e.bestBooks) }))} />
           </div>
         )}
+        <ConnStatus />
         {sound.locked && !sound.prefs.muted && <p className="lr-sound-hint">🔈 Clique ou aperte uma tecla para ligar a música</p>}
         <p className="lr-hint">
           Jogue com controle, teclado ou toque ·{' '}
@@ -45,7 +46,7 @@ export function MenuScreen() {
   )
 }
 
-function MiniList({ title, items, icon }: { title: string; items: { id: string; name: string; value: string }[]; icon?: boolean }) {
+function MiniList({ title, items, icon }: { title: string; items: { id: string; name: string; photo?: string; value: string }[]; icon?: boolean }) {
   return (
     <div>
       <p className="lr-mini-title">{title}</p>
@@ -54,7 +55,7 @@ function MiniList({ title, items, icon }: { title: string; items: { id: string; 
           <li key={e.id} className={i === 0 ? 'is-first' : ''}>
             <span className="lr-pos">{i + 1}º</span>
             <span className="lr-name">
-              <Avatar id={e.id} name={e.name} size={22} />
+              <Avatar id={e.id} name={e.name} photo={e.photo} size={22} />
               {e.name}
             </span>
             <span className="lr-pts">
